@@ -1,6 +1,6 @@
-longRead Assembly pipeline 
+# longRead Assembly pipeline 
 
-**README for Nephele2 CLI USERs** \
+**README for Nephele2 HPC USERs** \
 Angelina Angelova \
 Mar 2024 \
 
@@ -37,16 +37,17 @@ This is a snakefile that is set to run & tested on Biowulf in a cluster setup =>
 
 ## Snakefile & supporting scripts
 
-Scripts can be found at 	
-	
-	* on web: [https://github.com/angelovaag/LoRA_public](https://github.com/niaid/microbiome-script-share/tree/main/lRA_pipeline) 
+Scripts can be found on web at: [https://github.com/angelovaag/LoRA_public](https://github.com/niaid/microbiome-script-share/tree/main/lRA_pipeline) 
 
 File structure is:
 
 ##### Main pipeline scripts: `snakefile-clust` , `config.yaml` && `utils.smk` 
 ##### Cluster setup scripts: `utils-clust.smk` & `submit_snake_biowulf.sh` 
 #### Supporting, customized & R scripts: `supplementary`, 
-#### Databases:  `TAXdb` files & `CARDdb` files can be downloaded using the `LoRA_public/supplementary/conda_installs/download_DB.sh` script
+#### Databases:  
+* taxonomic & CARD databases: `TAXdb` files & `CARDdb` files can be downloaded using script \
+`LoRA_public/supplementary/conda_installs/download_DB.sh`
+* custom decontamination DBs: USER can either prepare their own custom `HOSTdb` files [using Kraken](https://telatin.github.io/microbiome-bioinformatics/Build-a-kraken2-database/) (add the —no-masking flag), or contact LoRA team for copy of the already built `HOSTdb` files linked below.
 
 ## Software tools, scripts, databases (from web)
 
@@ -188,7 +189,7 @@ These settings depend on bin_wCheckM being set to TRUE.
 
 ### Databases SETTINGS 
  
-**HOST DBs (decontamination)**: unhash **one line** of following options:
+**HOSTdb (decontamination databases)**: unhash **one line** of following options:
 	
 	 - defaultDB  (human+mouse\_db) [default]
 	 - mosquitoDB (mosq\_db)
@@ -197,8 +198,7 @@ These settings depend on bin_wCheckM being set to TRUE.
 	 - plantsDB   (plants\_db)
 	 - primatesDB (primates\_db)
 	 - rodentsDB  (rodents\_db)
-USER can either prepare their own custom DB using Kraken or contact LoRA team for copy of the above. 
-
+Note: those are provided upon request or custom build by USER
 
 **TAXclassificaton DBs**: unhash elect **one block** of the following options
 
@@ -439,5 +439,3 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 
 
 # end of file
-
-
