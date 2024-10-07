@@ -1,8 +1,8 @@
-# longRead Assembly pipeline 
+longRead Assembly pipeline 
 
-**README for Nephele2 developers**
-Angelina Angelova
-Mat 2024
+**README for Nephele2 CLI USERs** \
+Angelina Angelova \
+Mar 2024 \
 
 
 
@@ -24,38 +24,29 @@ Mat 2024
 
 ## Initial comments: 
 
-This is a snakefile that is set to run & tested on Biowulf in a cluster setup => there are some rules, options and settings that are set up for biowulf HPC, that would need to be adjusted/amended for Skyline/Locus/EC2/Nephele runs
+This is a snakefile that is set to run & tested on Biowulf in a cluster setup => there are some rules, options and settings that are set up for biowulf HPC, that would need to be adjusted/amended for other HPCs or EC2.
 
 1) Every tool that is used by the snakefile on Biowulf runs, is loaded as a module through the `cluster_config-biowulf.yaml`. For different HPC is to be used, create a different cluster_config file specific for that HPC.
 
-2) The supplemental & R scripts used by the snakemake are provided under the supplemental & Rscripts folders of the pipeline. Paths used in snakefile for each of those scripts, are set up in `config.yaml`, and need to be modified for the HPC in use.
+2) The supplemental & R scripts used by the snakemake are provided under the supplemental/ folders of the pipeline, but some files need to be un-archived. Paths used in snakefile for each of those scripts & files, are set up in `config.yaml`, and need to be modified for the HPC in use. Note: the minpath tool provided with LoRA, is slightly modified from original. It is better to use the provided modified version
 
-3) For the biowulf version of the pipeline, there was no global options settings (fancy set up fed in as `wgsa_config.py`-like file). SME just manually unhash the block of paths associated with each classification DB (and comments out the un-needed DB paths).
+3) For the biowulf version of the pipeline, there was no global options settings. CLI user just manually unhash the block of paths associated with each classification DB (and comments out the un-needed DB paths).
 
-4) The input fileNames of the `.fastq.gz` files for this snakemake not read in through the mapping file (couldnt figure that one out). => The input fileNames read in follow a structure: `readsDIR + SampName + readSFFX + readsEXT`.
-
-
+4) The input fileNames of the `.fastq.gz` files for this snakemake read in through the mapping file. => The input fileNames read in follow a structure: `readsDIR + SampName + readSFFX + readsEXT`.
 
 
 ## Snakefile & supporting scripts
 
 Scripts can be found at 	
 	
-	* on web (not-as-up-to-date): [BCBB microbiome share GitHub Repo](https://github.com/niaid/microbiome-script-share/tree/main/lRA_pipeline) 
-	* on Biowulf: `/data/BCBB_microbiome_db/longReadAssembly_pipeline/snk-clust`
+	* on web: [https://github.com/angelovaag/LoRA_public](https://github.com/niaid/microbiome-script-share/tree/main/lRA_pipeline) 
 
 File structure is:
 
 ##### Main pipeline scripts: `snakefile-clust` , `config.yaml` && `utils.smk` 
 ##### Cluster setup scripts: `utils-clust.smk` & `submit_snake_biowulf.sh` 
-#### Supporting, customized & R scripts: `supplementary`, `TAXdb` files & `CARDdb` files
- 
- * supplementary, R & minpath files at `/data/BCBB_microbiome_db/longReadAssembly_pipeline/snk-clust/supplementary`
- * TAXdbs: `/data/BCBB_microbiome_db/Kraken2_db/db_prep_files/taxonnomy/` (mostly)
- * CARDdb: `/data/BCBB_microbiome_db/CARD_db/v3.2.9/CARD_db-v3.2.9/`
-
-
-
+#### Supporting, customized & R scripts: `supplementary`, 
+#### Databases:  `TAXdb` files & `CARDdb` files can be downloaded using the `LoRA_public/supplementary/conda_installs/download_DB.sh` script
 
 ## Software tools, scripts, databases (from web)
 
@@ -109,13 +100,13 @@ File structure is:
 |Sample3   | Sample3_someSuffix.fastq.gz | Group2         |
 |Sample4   | Sample4_someSuffix.fastq.gz | Group1         |
 
-2)  **reads DIR **: set through `readsDIR` in `config.yaml` to describe file names. Snakemake reconstructs file name structure with:  `readsDIR` + `SampName` + `readSFFX` + `readsEXT`. Reads could be:
+2) **reads DIR **: set through `readsDIR` in `config.yaml` to describe file names. Snakemake reconstructs file name structure with:  `readsDIR` + `SampName` + `readSFFX` + `readsEXT`. Reads could be:
 
 3) **reads**: can be `fastq.gz` or `fastq` (theoretically, not tested). Reads can also be:
 
- * _RAW reads_:  non-QCd reads, raw reads (still its better to have primers and adaptors removed from the sequence but sequences do not need to be HQ); or 
- * _HQ20reads_: reads that have passed through minionQC pipeline (and are thus with quality >20). Those may have a `readSFFX` like "\_trimmed", "\_filtered", "\_pc_trimmed" or anything). `readSFFX` is a variable of a string that is not wished propagated as part of the SampName in output files; or
- * _CORRreads_: reads that have passed not only QC but also a error-correction tool such as Canu or something (some users might have)
+* _RAW reads_:  non-QCd reads, raw reads (still its better to have primers and adaptors removed from the sequence but sequences do not need to be HQ); or 
+* _HQ20reads_: reads that have passed through minionQC pipeline (and are thus with quality >20). Those may have a `readSFFX` like "\_trimmed", "\_filtered", "\_pc_trimmed" or anything). `readSFFX` is a variable of a string that is not wished propagated as part of the SampName in output files; or
+* _CORRreads_: reads that have passed not only QC but also a error-correction tool such as Canu or something (some users might have)
 
 
 ## Snakemake files and needed adjustments for initial run
@@ -135,7 +126,7 @@ At first use of the snakemake, adjust the following files (for the HPC or projec
 
 
 
-# Pipeline SME options (config.yaml)
+# Pipeline options (config.yaml)
 
 Paths to **scriptDIR** (path to folder where all the scripts are) && **clusterFILE** (full path and name of the cluster_config file) need to be present and set. Also, set the user-dependent **permanent PATHS** at end of file (or set to use global ones from the shared dir)
 
@@ -206,6 +197,7 @@ These settings depend on bin_wCheckM being set to TRUE.
 	 - plantsDB   (plants\_db)
 	 - primatesDB (primates\_db)
 	 - rodentsDB  (rodents\_db)
+USER can either prepare their own custom DB using Kraken or contact LoRA team for copy of the above. 
 
 
 **TAXclassificaton DBs**: unhash elect **one block** of the following options
@@ -236,18 +228,18 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Rules: `decontam`
 * Resources: Low demand on memory, depending on DB chosen by user (`$HOST DB`): ~2x size of DB. 
 * Notes: 
-	 * To be performed against the `$HOST DB` chosen by user. 
-	 * for Biowulf, kraken is hardwired to expect zipped files. Flag `--gzip-compressed` may have to be removed if input is `.fastq`
-	 * for Biowulf, the input files are read in as: `readsDIR + sampName + readSFFX + readEXT`
-	 * Functionality: The script reads in `fastq.gz` files from whatever `readsDIR` is chosen and decontaminates against host DB chosen.
+  * To be performed against the `$HOST DB` chosen by user. 
+  * for Biowulf, kraken is hardwired to expect zipped files. Flag `--gzip-compressed` may have to be removed if input is `.fastq`
+  * for Biowulf, the input files are read in as: `readsDIR + sampName + readSFFX + readEXT`
+  * Functionality: The script reads in `fastq.gz` files from whatever `readsDIR` is chosen and decontaminates against host DB chosen.
 * **Expected Input**: 
 
-	1) `$SampName` - the wildcard for each sample name 
-	2) `$readsDIR` - input DIR chosen
-	3) `$readSFFX` - suffix variable for the string used beyond the \$SampName & before the file extension ".fastq.gz" 
-	4) `$readsEXT` - file name extension like `fastq.gz` 
+  1) `$SampName` - the wildcard for each sample name 
+  2) `$readsDIR` - input DIR chosen
+  3) `$readSFFX` - suffix variable for the string used beyond the \$SampName & before the file extension ".fastq.gz" 
+  4) `$readsEXT` - file name extension like `fastq.gz` 
 * **Output**:
-	* `decontam/SampName_{decontam.fastq.gz,_contamLOG.txt,_contamREPORT.txt}`: DIR with decontaminated seq ,log & report files (3x sample)
+  * `decontam/SampName_{decontam.fastq.gz,_contamLOG.txt,_contamREPORT.txt}`: DIR with decontaminated seq ,log & report files (3x sample)
 
 ### Step 2) Assembly
 
@@ -256,17 +248,17 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: High demand for time, memory & tmpDIR space. Usage builds up over time
 * Functionality: assembles long reads
 * Notes:
-	* Creates a lot of large temp files & folders for each `$SampName`, so it is set to run in a `tmpDIR`
-	* Only the final files (prefixed with `assembly`) are copied to the `$outDIR`
-	* The `$outDIR` should be `assemblies/SampName_asmb/` by default, but ...
-	* for Biowulf (SMEs & testing), the `$outDIR` main folder name is set with the `MAIN_ASMB_DIR_NAME` variable in `confif.yaml` file.
-	* for Nephele, variable `MAIN_ASMB_DIR_NAME` should be set to **"assemblies/"** and _not be user option_
-	* `$outDIR` will contain individual assembly subfolders for each sample, named `SampName_asmb/`
-	* within each `$SampName_asmb/` folder, output file prefixes start with `assembly_`
+  * Creates a lot of large temp files & folders for each `$SampName`, so it is set to run in a `tmpDIR`
+  * Only the final files (prefixed with `assembly`) are copied to the `$outDIR`
+  * The `$outDIR` should be `assemblies/SampName_asmb/` by default, but ...
+  * for Biowulf (SMEs & testing), the `$outDIR` main folder name is set with the `MAIN_ASMB_DIR_NAME` variable in `confif.yaml` file.
+  * for Nephele, variable `MAIN_ASMB_DIR_NAME` should be set to **"assemblies/"** and _not be user option_
+  * `$outDIR` will contain individual assembly subfolders for each sample, named `SampName_asmb/`
+  * within each `$SampName_asmb/` folder, output file prefixes start with `assembly_`
 * **Output**:
-	* `assemblies/$SampName_asmb/assembly_graph.{gfa,gv}` (2 graph files)
-	* `assemblies/$SampName_asmb/assembly{_info.txt,.fasta}` (2 main output files) 
-	* `assemblies/$SampName_asmb/assembly.done,flye.log`  (2 log files)
+  * `assemblies/$SampName_asmb/assembly_graph.{gfa,gv}` (2 graph files)
+  * `assemblies/$SampName_asmb/assembly{_info.txt,.fasta}` (2 main output files) 
+  * `assemblies/$SampName_asmb/assembly.done,flye.log`  (2 log files)
 
 ### Step 3) Mapping decontaminated reads to assembly
 
@@ -277,8 +269,8 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Rules: `minimap_index`, `minimap2bam`
 * Functionality: maps decontaminated reads to the assembled scaffolds. Then uses the mapped reads file (sam/bam) to enumerate reads mapped for each scaffold
 * **Output**:
-	* output within the `assemblies/$SampName_asmb/` folder
-	* `assemblies/$SampName_asmb/assembly.{bam,bam.bai,mapLOG}`
+  * output within the `assemblies/$SampName_asmb/` folder
+  * `assemblies/$SampName_asmb/assembly.{bam,bam.bai,mapLOG}`
  
 
 ### Step 4) Getting other assembly stats
@@ -290,7 +282,7 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: average
 * Functionality: Uses the assembly FASTA, BAM & INFO files, to calculate and add more stat columns to the assembly SUMMARY file from each sample. These stats are used later in the workflow
 * **Output**:
-	* `assemblies/$SampName_asmb/assemblySUMMARY.txt`
+  * `assemblies/$SampName_asmb/assemblySUMMARY.txt`
 
 
 
@@ -301,10 +293,10 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: High memory depending on `$classDB` chosen 
 * Functionality: assigns taxonomy to assembled scaffolds & uses assembly stats file (from step4) to estimate abundance. Also creates .html plots 
 * **Output**:
-	* `assemblies/$SampName_asmb/asmbTAX/$TAXdbNAME/{classLOG,$SampName{_4krona,_taxREPORT}}.txt`
-	* `assemblies/$SampName_asmb/assemblySUMMARY_$dbNAME.txt`
-	* `profilesTAX/$TAXdbNAME/kronabin/$SampName_4krona.txt` (Copies of _4krona files from each sample)
-	* `profilesTAX/$TAXdbNAME/asmbTAX_plots.html` **---> for Nephele RESULTS page** 
+  * `assemblies/$SampName_asmb/asmbTAX/$TAXdbNAME/{classLOG,$SampName{_4krona,_taxREPORT}}.txt`
+  * `assemblies/$SampName_asmb/assemblySUMMARY_$dbNAME.txt`
+  * `profilesTAX/$TAXdbNAME/kronabin/$SampName_4krona.txt` (Copies of _4krona files from each sample)
+  * `profilesTAX/$TAXdbNAME/asmbTAX_plots.html` **---> for Nephele RESULTS page** 
 
 
 
@@ -315,11 +307,11 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: low
 * Functionality: takes in files from `profilesTAX/$TAXdbNAME/kronabin` folder, merges them into a community matrix & creates diversity plots. The merging script is set to if the R-version errors out, the python version is automatically attempted to produce  the same resulting table. 
 * **Additional input**: 
-	* the mapping file set with `$map_file` variable in `config.yaml` file
+  * the mapping file set with `$map_file` variable in `config.yaml` file
 * **Output**:
-	* `profilesTAX/$TAXdbNAME/merged_asmbTAX_{table_wLIN.txt,_json.biom}`
-	* `profilesTAX/$TAXdbNAME/DivPlots/TAX_*.{pdf,png,txt,done}` (10 files)
-	* `profilesTAX/$TAXdbNAME/DivPlots/TAX_BetaDiv_PCoA.png` **---> for Nephele RESULTS page** 
+  * `profilesTAX/$TAXdbNAME/merged_asmbTAX_{table_wLIN.txt,_json.biom}`
+  * `profilesTAX/$TAXdbNAME/DivPlots/TAX_*.{pdf,png,txt,done}` (10 files)
+  * `profilesTAX/$TAXdbNAME/DivPlots/TAX_BetaDiv_PCoA.png` **---> for Nephele RESULTS page** 
 
 
 
@@ -333,10 +325,10 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: High demand on time & memory. 
 * Functionality: predicts gene features, annotates genes and enumerates reads aligning to each gene/feature (basic gene stats)
 * **Output**
-	* `assemblies/$SampName_asmb/asmbPWY/genesSUMMARY.txt`
-	* `assemblies/$SampName_asmb/asmbPWY/features/{feature.{faa,fna,gff,gtf},feature_{stats,counts_wTPM}.txt}`
-	* `assemblies/$SampName_asmb/asmbPWY/annotations/annotations.emapper.{annotations,hits,seed_orthologs}`,
-	* `assemblies/$SampName_asmb/asmbPWY/annotations.txt`
+  * `assemblies/$SampName_asmb/asmbPWY/genesSUMMARY.txt`
+  * `assemblies/$SampName_asmb/asmbPWY/features/{feature.{faa,fna,gff,gtf},feature_{stats,counts_wTPM}.txt}`
+  * `assemblies/$SampName_asmb/asmbPWY/annotations/annotations.emapper.{annotations,hits,seed_orthologs}`,
+  * `assemblies/$SampName_asmb/asmbPWY/annotations.txt`
 
 ### Step 8) Gene extractions & gene stats gene table merging
 
@@ -345,9 +337,9 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: low
 * Functionality: uses information from gene finding step to extract gene sequences, basic gene stats and calculate TPM per gene and average per annotation.
 * **Output**:
-	* `assemblies/$SampName_asmb/asmbPWY/genes{EC,KO}.{faa,fna}`
-	* `assemblies/$SampName_asmb/asmbPWY/$SampName_aveGEN.{ec,ko}.txt`
-	* `profilesPWY/geneBIN{ec,ko}/$SampName_aveGEN.{ec,ko}.txt`
+  * `assemblies/$SampName_asmb/asmbPWY/genes{EC,KO}.{faa,fna}`
+  * `assemblies/$SampName_asmb/asmbPWY/$SampName_aveGEN.{ec,ko}.txt`
+  * `profilesPWY/geneBIN{ec,ko}/$SampName_aveGEN.{ec,ko}.txt`
 	
 ### Step 9) Inferring PWYs from gene information
 
@@ -357,8 +349,8 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Notes: minPath tool needs to be installed, but essentially our custom `minPATH-PRNi` script is used. It enables a manual set for MinPath's temporary files (with `--mps` flag), so these dont get overprinted from sample to sample. _thank you Poorani!_
 * Functionality: use `annots_type` gene information (user election), to infer functional information from the genetic information. The steps use a few custom database files that map genes to pathways (PWYs) as well as the sample-specific gene and gene abundance information files. These files get temporarily copied into each sample's folder and be used by minPath locally, in order to avoid interference during processing. This means a few temp files are produced during these steps, but they are _not_ to be processed in `tmpDIR`
 * **Output**: 
-	* `assemblies/$SampName_amb/asmbPWY/pathways_$anno2pwy/minPATH.{log,report,details}.txt`  
-	* `assemblies/$SampName_amb/asmbPWY/pathways_$anno2pwy/complete_pathways.txt`
+  * `assemblies/$SampName_amb/asmbPWY/pathways_$anno2pwy/minPATH.{log,report,details}.txt`  
+  * `assemblies/$SampName_amb/asmbPWY/pathways_$anno2pwy/complete_pathways.txt`
 	
 ### Step 10) Visualizing PWY profiles & merging PWY tables
 
@@ -367,13 +359,13 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: low
 * Functionality: inferred PWY files are reformatted into visualization files & plotted. Tables are merged & diversity plots made for functional inference
 * **Additional input**: 
-	* the mapping file set with `$map_file` variable in `config.yaml` file
+  * the mapping file set with `$map_file` variable in `config.yaml` file
 * **Outputs**
-	* `assemblies/$SampName_amb/asmbPWY/pathways_$anno2pwy/$SampName_4krona.txt`
-	* `profilesPWY/pwyBIN_$pwyDB/$SampName.txt` (copy of the `_4krona` file from each sample, no "\_4krona" string)
-	* `profilesPWY/asmbPWYs_$pwyDB_plot.html` **---> for Nephele RESULTS page** 
-	* `profilesPWY/merged_avePWY.{KEGG,MetaCyc}_{table,json}.{txt,biom}`
-	* `profilesPWY/DivPlots_$pwyDB/PWY_*.{pdf,done)` (4 files)
+  * `assemblies/$SampName_amb/asmbPWY/pathways_$anno2pwy/$SampName_4krona.txt`
+  * `profilesPWY/pwyBIN_$pwyDB/$SampName.txt` (copy of the `_4krona` file from each sample, no "\_4krona" string)
+  * `profilesPWY/asmbPWYs_$pwyDB_plot.html` **---> for Nephele RESULTS page** 
+  * `profilesPWY/merged_avePWY.{KEGG,MetaCyc}_{table,json}.{txt,biom}`
+  * `profilesPWY/DivPlots_$pwyDB/PWY_*.{pdf,done)` (4 files)
 	
 	
 ### --------------- if `runRGI` == TRUE ----------------- [default = FALSE ]
@@ -384,7 +376,7 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: average
 * Functionality: Uses features predicted in Step 7 & the `$CARD_db` to identify resistance genes
 * **Output**:
-	* `assemblies/$SampName_asmb/asmbPWY/RGI/rgiFNA_{main,raw}.{txt,json}` (3 files)
+  * `assemblies/$SampName_asmb/asmbPWY/RGI/rgiFNA_{main,raw}.{txt,json}` (3 files)
 	
 	
 ### ------------- if `bin_w_checkM` == TRUE ------------- [default = FALSE]
@@ -395,8 +387,8 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: average
 * Functionality: scans scaffolds for specific features & separates them into separate multi-fasta files (called 'bins') that are assumed to be different organisms.
 * **Outputs**:
-	*  `assemblies/$SampName_asmb/MAGs/mag.{[0-9]+,tooShort,unbinned}.fa` (number of files depends on sample)
-	*  `assemblies/$SampName_asmb/MAGs/{binsList.txt,binning.done}`
+  * `assemblies/$SampName_asmb/MAGs/mag.{[0-9]+,tooShort,unbinned}.fa` (number of files depends on sample)
+  * `assemblies/$SampName_asmb/MAGs/{binsList.txt,binning.done}`
 
 ### Step 5.2) binQC workflow (CheckM)
 
@@ -405,8 +397,8 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: High. Very time & memory consuming steps. We hate CheckM
 * Functionality: using checkM internal database, it determines the most likely taxonomic affiliations of the scaffolds within each bin, the level of completion of the most likely organismal affiliation of the entire bin, contamination level of the bin and other stats. 
 * **Outputs**: 
-	* `assemblies/$SampName_asmb/MAGs/checkM/{lineage.ms,checkm.log.lineageWF.done}`
-	* `assemblies/$SampName_asmb/MAGs/mag{QA,TAX,COVR,PROFILES}.txt`
+  * `assemblies/$SampName_asmb/MAGs/checkM/{lineage.ms,checkm.log.lineageWF.done}`
+  * `assemblies/$SampName_asmb/MAGs/mag{QA,TAX,COVR,PROFILES}.txt`
 
 ### Step 5.3) binQC summary & visualizations
 
@@ -415,9 +407,9 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: low
 * Functionality: some processing of the CheckM outputs takes place for summary and visualization files.
 * **Outputs**:
-	* `assemblies/$SampName_asmb/MAGs/magSUMMARY.txt` 
-	* `assemblies/$SampName_asmb/assemblySUMMARY_$dbNAME_wBINqc.txt` 
-	* `assemblies/$SampName_asmb/MAGs/magTAXplots.html`
+  * `assemblies/$SampName_asmb/MAGs/magSUMMARY.txt` 
+  * `assemblies/$SampName_asmb/assemblySUMMARY_$dbNAME_wBINqc.txt` 
+  * `assemblies/$SampName_asmb/MAGs/magTAXplots.html`
 	
 
 
@@ -429,8 +421,8 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: High! Time & memory & space demanding
 * Functionality: in addition to checkM (completed in steps 5.{2,3}), GTDB-tk is run, to improve taxonomic resolution into TAX assignments of individual bins (the tax predictions are literally better!). Tool still only valid for prokaryotic organisms. The GTDB predictions are visualized & summarized.
 * **Outputs**:
-	* `assemblies/$SampName_asmb/MAGs/checkM/GTDBtk/` main folder with 4 sub-folders (`{align/,classify/,identify/,logs/}`)
-	* `assemblies/$SampName_asmb/MAGs/checkM/GTDBtk/GTdb{-TAX.summary.tsv,-tk.done,_magTAXplots.html}` (3 summary fiiles)
+  * `assemblies/$SampName_asmb/MAGs/checkM/GTDBtk/` main folder with 4 sub-folders (`{align/,classify/,identify/,logs/}`)
+  * `assemblies/$SampName_asmb/MAGs/checkM/GTDBtk/GTdb{-TAX.summary.tsv,-tk.done,_magTAXplots.html}` (3 summary fiiles)
 	
 ### ----------- if `blobPlots` == TRUE ------------ [default = TRUE]
 ### Step 5.5) creating blob plots
@@ -440,8 +432,8 @@ The submit script will created a `logsDIR` in the project DIR, to output each cl
 * Resources: Time consuming but average on the computational resource consumption
 * Functionality: We like this tool. It takes in the TAX classifications produced for each scaffold in step 5.0, the bins from step 5.1 and some stats from step 5.2, and creates nifty plots visualizing the content and quality of each MAG/bin. Tool does not depend on GTDBtk step
 * **Outputs**: 
-	* `assemblies/$SampName_asmb/MAGs/checkM/blobPlots/` main folder with 6x files per bin (lots of files).
-	* `assemblies/$SampName_asmb/MAGs/checkM/blobs.done` (finished successfully)  
+  * `assemblies/$SampName_asmb/MAGs/checkM/blobPlots/` main folder with 6x files per bin (lots of files).
+  * `assemblies/$SampName_asmb/MAGs/checkM/blobs.done` (finished successfully)  
 
 
 
