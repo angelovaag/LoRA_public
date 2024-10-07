@@ -1,0 +1,143 @@
+## NOTES:
+### install myblobtools in private path. Fix path in cluster_config-biowulf.yaml
+### inside the snakefile, ensure the configfile & utils file have the right paths at begining of file
+
+scriptsDIR:  "/home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust"
+clusterFILE: "/home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/cluster_config-biowulf.yaml"
+
+
+
+### ------------- input SETTINGS ------------- ## unhash & edit the needed 
+
+MAIN_ASMB_DIR_NAME: "assembliesONT_10/"              ### name your own asmbDIR (good for testing)
+map_file: "mappingZymosONT_DNAsub4.txt"                      ### mapping.txt
+readsDIR: "fastqQC/trimmed_ADP-QUAL/"              ## name pat/to/DIR of RAW or CLN longREAD fastq.gz reads
+readSFFX: "_AQtrimmed"                              ## after sampName, is there more suffix? ex: "_R001", "_QCd_" 
+readsEXT: ".fastq.gz"                      
+SEQ_TYPE: "ONT"                                     ## pack bio or minion (Flye and minimap setting)
+DATA_QUAL: "HQ" ## RAW or ## CORR                   ## Flye settings depend on RAW, CORR or HQ (QC20) data   
+
+# MAIN_ASMB_DIR_NAME: "assembliesPB6-conda/"              ### name your own asmbDIR (good for testing)
+# map_file: "mappingZymosPacBio6.txt"                     ### mapping.txt
+# readsDIR: "rawPacBio/"                                ## name the DIR of RAW or QCd minION fastq.gz reads
+# readSFFX: ""                                          ## "_AQtrimmed" 
+# readsEXT: ".fastq.gz"                                       
+# SEQ_TYPE: "PB"                                     ##  ## pack bio or minion (Flye and minimap setting)
+# DATA_QUAL: "RAW" ## "HQ" ## RAW or ## CORR                   ## Flye settings depend on RAW, CORR or HQ (QC20) data   
+
+
+### ------------- project SETTINGS ------------- 
+hostCONF: 0 ##0.05
+taxCONF: 0.1                                        ## kraken confidence level
+asmb_polish_steps: 2                                ## for metaFlye, how many iterations of assembly refinement to perform
+readTAX: False                ## keep at F          ### read-based taxonomy with crap ABUscores for LongRead
+
+PREDICT_FUNCTION: True
+annots_type: "EC" ##"KO" ## ##"EC" ## 
+runRGI: False          ## require predict_fun = T
+
+
+### ---------------- MAGs SETTINGS -----------------------
+
+bin_w_checkM: True     ## do you want binning or checkm run?  [def: F]                   
+GTDBtk: False          ## require bin_w_checkM = T  ### takes long long time [def: F]
+CheckM_plots: False    ## keep at F                 ### not really compatibe with checkmM2 [def: F]
+blobPlots: False       ## require bin_w_checkM = T  ### should be good plots for each bin [def: F]
+
+
+###### ------------- Databases SETTINGS -----------  ## unhash the needed set
+
+### -----  HOST DBs -------------------------
+decontamDB: /data/BCBB_microbiome_db/Kraken2_db/decontam_db/decontam_human+mouse_db
+# decontamDB: /data/BCBB_microbiome_db/Kraken2_db/decontam_db/decontam_mosq_db
+# decontamDB: /data/BCBB_microbiome_db/Kraken2_db/decontam_db/decontam_nematode_db
+# decontamDB: /data/BCBB_microbiome_db/Kraken2_db/decontam_db/decontam_marine_db
+# decontamDB: /data/BCBB_microbiome_db/Kraken2_db/decontam_db/decontam_plants_db
+# decontamDB: /data/BCBB_microbiome_db/Kraken2_db/decontam_db/decontam_primates_db
+# decontamDB: /data/BCBB_microbiome_db/Kraken2_db/decontam_db/decontam_rodents_db
+
+
+### ------- TAX DBs --------------------------
+#### # if plusPFPV is desired, use these paths:
+#TAXdbNAME:     "RefSEQdb"
+# TAXdbPATH:      /data/BCBB_microbiome_db/Kraken2_db/taxonomic_db/plus_PFPV_Mar2023/
+# TAXDUMP_PATH:   /data/BCBB_microbiome_db/Kraken2_db/taxonomic_db/plus_PFPV_Mar2023/taxdump_Mar2023
+# TAXdbPATH:      /data/BCBB_microbiome_db/Kraken2_db/taxonomic_db/plus_PFPV_Jun2024/
+# TAXDUMP_PATH:   /data/BCBB_microbiome_db/Kraken2_db/taxonomic_db/plus_PFPV_Jun2024/taxdump_Jul2024
+  ## this folder should contain the names.dmp, nodes.tmp (taxonkit & blobtools) and taxonomy.tab (kronaTools) specific for this DB_version
+
+
+#### # if MGBCdb is desired, use these paths:
+# TAXdbNAME:    "MGBCdb"
+# TAXdbPATH:    /data/BCBB_microbiome_db/Kraken2_db/taxonomic_db/MGBCdb/
+# TAXDUMP_PATH: /data/BCBB_microbiome_db/Kraken2_db/taxonomic_db/MGBCdb/taxonomy
+  ## this folder should contain the names.dmp, nodes.tmp (taxonkit & blobtools) and taxonomy.tab (kronaTools) specific for this DB_version
+
+
+### # if GTdb is desired, use these paths:
+TAXdbNAME:    "GTdb"
+TAXdbPATH:    /data/BCBB_microbiome_db/Kraken2_db/taxonomic_db/GTdb_r207/
+TAXDUMP_PATH:  /data/BCBB_microbiome_db/Kraken2_db/taxonomic_db/GTdb_r207/taxonomy_v207_Jul2022
+  ## this folder should contain the names.dmp, nodes.tmp (taxonkit & blobtools) and taxonomy.tab (kronaTools) specific for the DB_version
+
+###### ------------- permannent PATHs (user-dependent) -------------
+
+mergeTABLES_script: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/mergeTABLES_byTAXid.py
+addLINEAGE_script: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/exe_taxonkit_kronaTAX.sh 
+
+
+## PREDICT_FUNCTION scripts
+gff2gtf_script:   /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/gff2gtf.sh
+KO_descriptions: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/KO_list_0624.txt
+EC_descriptions: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/EC_list_0624.txt
+aveGEN_merge:    /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/merge_aveTPM.awk
+CARD_DB_JSON:    /data/BCBB_microbiome_db/CARD_db/v3.2.9/CARD_db-v3.2.9/card.json
+
+
+## PREDICT_PWYS scripts 
+mpMASTER_DIR: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/minpath_prni/
+minpath_script: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/minpath_prni/MinPath.py
+koMAP_file: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/minpath_prni/data/KEGGdb_0624/KEGGpwy-ko2map_0624.txt
+koHRR_file: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/minpath_prni/data/KEGGdb_0624/KEGGhrr_brite_0624.txt
+
+
+ecMAP_file: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/minpath_prni/data/mCYCdb_0724/mCyc_0724_ec2pwy.txt
+ecHRR_file: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/minpath_prni/data/mCYCdb_0724/mCyc_0724_hrr.txt
+# ecMAP_file: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/minpath_prni/data/mCYCdb_0922/MetaCyc-ec2pwy_092022.txt
+# ecHRR_file: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/minpath_prni/data/mCYCdb_0922/MetaCyc-HRCHY_092022_wMAPid.txt
+
+genes2krona_script: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/genes2KronaTable-python39.py
+
+# Rscripts
+TAX_mergeR_script: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/Rscripts/TableMergingLongReads_TAX_v6.R  ## alt to py3 script
+TAX_divR_script:   /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/Rscripts/DiversityPlotsLongReads_TAX_v6.R
+
+PWY_mergeR_script: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/Rscripts/TableMergingLongReads_PWY_v6.R
+PWY_divR_script:   /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/Rscripts/DiversityPlotsLongReads_PWY_v6.R
+
+
+##### --------- outdated links for testing & backup -------
+
+## eggnog_db: /usr/local/apps/eggnog-mapper/2.1.6/data/ ## if module is loaded, this is not needed
+
+## kreport2krona_script: /home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/supplementary/kreport2krona_modifications/kreport2krona.py
+## kreport2krona_script: /home/angelovaag/MyScripts/kreport2krona_modifications/kreport2krona.py ## only for readTAX
+## kreport2kronaSCRIPT: /home/angelovaag/MyScripts/kreport2krona_modifications/kreport2krona_modwgsa_wTAXid_last.py
+
+### blobPATH: ~/.local/bin/blobtools
+### blastDB:  /fdb/blastdb/nt ## essentially not used
+
+# minPATH_DIR: /home/angelovaag/MyScripts/Nephele_WmGS/v2.2_opt/MinPath-master
+
+# EC_descriptions: /data/angelovaag/DataTest/MinPath_DBmake/MinPathDB/MetaCyc_myfiles_0922/EC_list_0922.txt
+# EC_descriptions: /data/angelovaag/DataTest/MinPath_DBmake/MinPathDB/mCYCdb_0624/EC_list_0724_BRENDA.txt
+
+
+# koMAP_file: /data/angelovaag/DataTest/MinPath_DBmake/MinPathDB/KEGGdb_0922/KEGG-ko2map-092022.txt
+# koHRR_file: /data/angelovaag/DataTest/MinPath_DBmake/MinPathDB/KEGGdb_0922/KEGG-HRCHY-092022_wMAPid.txt
+
+
+# # ecMAP_file: /data/angelovaag/DataTest/MinPath_DBmake/MinPathDB/mCYCdb_0624/mCyc_0624_ec2pwy.txt
+# # ecHRR_file: /data/angelovaag/DataTest/MinPath_DBmake/MinPathDB/mCYCdb_0624/mCyc_0624_hrr.txt
+# ecMAP_file: /data/angelovaag/DataTest/MinPath_DBmake/MinPathDB/mCYCdb_0724/mCyc_0724_ec2pwy.txt
+# ecHRR_file: /data/angelovaag/DataTest/MinPath_DBmake/copy4_0724_mcyc/mCyc_0724_hrr.txt

@@ -1,0 +1,241 @@
+## cluster names need to match rule names, to be applicable
+
+__default__:
+  partition: norm
+  threads: 16
+  mem: 64G
+  time: "8:00:00"
+  extra: "--gres=lscratch:20"
+  modules:
+      - pigz
+      - python
+  tmpdir: TMP_DIR ##'lscratch/$SLURM_JOB_ID' ## the $SLURM is not getting read in
+  jobname: 'def_CLUST' ##_{wildcards.sampName}'
+  log: '{wildcards.sampName}'
+
+
+
+decontam:
+  mem: 64G
+  threads: 32
+  modules: 
+      - kraken/2.1.2
+      - pigz
+  jobname: 'clnHOST'
+
+assembly:
+  mem: 192G
+  threads: 48
+  modules:
+    - flye
+  extra: "--gres=lscratch:200"
+  jobname: 'asmb'
+
+minimap_index:
+  mem: 192G
+  threads: 48
+  modules:
+    - minimap2
+  jobname: 'mmp_idx'
+
+minimap2bam:
+  mem: 192G
+  threads: 48
+  modules:
+    - minimap2
+    - samtools
+  jobname: 'mmp_2bam'
+
+getDEPTHS:
+  mem: 96G
+  threads: 48
+  modules:
+    - bbtools
+    - metabat
+    - samtools
+  jobname: 'depths'
+
+##### ----------- asmbTAX starts ------------------ #####
+asmbTAX_Kraken2:
+  mem: 192G ## wish for 288G if GTdb
+  threads: 48
+  modules: 
+      - kraken/2.1.2
+  jobname: 'kr2_asmbTAX'
+
+
+asmbTAX_kronaPlot:
+  threads: 16
+  mem: 192G ##GtDB taxonomy exceeds lower allocation
+  modules: 
+      - kronatools
+  jobname: 'kroPlot'
+  log: 'asmbTAX'
+
+
+asmbTAX_mergeTABs:
+  threads: 4
+  mem: 8G
+  modules:
+    - R
+    - taxonkit
+    - python
+  jobname: "mergeTABs"
+  log: "asmbTAX"
+
+asmbTAX_biomTABs:
+  modules:
+    - biom-format
+  jobname: "biomTABs"
+  log: "asmbTAX"
+
+asmbTAX_divPLOTs:
+  threads: 4
+  mem: 8G
+  modules:
+    - R
+  jobname: "divPlots"
+  log: "asmbTAX"
+
+#### ------------ bin & checkM ----------- ###
+binning:
+  mem: 64G
+  threads: 32
+  modules:
+    - metabat
+  jobname: 'binning'
+
+
+checkM2_summary:
+  mem: 96G
+  threads: 48
+  modules:
+    - checkm2
+  conda: 
+    - checkm2
+  jobname: 'checkm2'
+
+checkM_coverge_and_profiles:
+  mem: 64G
+  threads: 32
+  modules:
+    - m-tools
+  jobname: 'checkm1' 
+
+
+magTAX_GTdbtk:
+  mem: 64G
+  threads: 16 ##does not seem to use more
+  modules:
+    - gtdb-tk
+  jobname: 'gtdb'
+
+magTAX_GTdb_kronaPlot:
+  threads: 8
+  mem: 16G
+  modules:
+    - kronatools
+  jobname: "magTAX-kronaPlot"
+
+
+CheckM_plots:
+  modules:
+    - m-tools
+  jobname: "checkmPlots"
+
+
+magTAX_blobs:
+  threads: 16
+  mem: 32G
+  blobtools: "~/.local/bin/blobtools"
+  conda: 
+    - blobtools
+  jobname: "blobPlots"
+
+
+asmbPWY_featurePrediction:
+  threads: 4
+  mem: 8G
+  modules:
+    - prodigal
+  jobname: "prodigal"
+
+asmbPWY_featureCounts:
+  threads: 8
+  mem: 16G
+  modules:
+    - subread
+  jobname: "subread"
+
+asmbPWY_featureAnnotation:
+  threads: 48
+  mem: 96G
+  modules:
+    - eggnog-mapper
+  jobname: 'eggnog'
+
+
+asmbPWY_geneSEQextract:
+  modules:
+    - seqtk
+  jobname: 'seqtk'
+
+asmbPWY_aveGEN:
+  threads: 4
+  mem: 8G
+  jobname: 'aveGEN'
+  log: 'asmbPWY'
+
+
+asmbPWY_merge_aveGEN_files:
+  threads: 4
+  mem: 8G 
+  jobname: 'mergeGEN'
+  log: 'asmbPWY'
+
+asmbPWY_kronaPlot:
+  threads: 8
+  mem: 16G
+  modules:
+    - kronatools
+  jobname: 'kroPlot'
+  log: 'asmbPWY'
+
+asmbPWY_merge_PWYtables:
+  threads: 4
+  mem: 8G
+  modules:
+    - R 
+  jobname: 'mergeTABs'
+  log: 'asmbPWY'
+
+
+asmbPWY_PWYbioms:
+  threads: 4
+  mem: 8G
+  modules:
+    - biom-format
+  jobname: "bioms"
+  log: "asmbPWY"
+
+asmbPWY_divPLOTs:
+  threads: 4
+  mem: 8G
+  modules:
+    - R
+  jobname: 'divPlots'
+  log: "asmbPWY"
+
+run_RGI:
+  threads: 16
+  mem: 32G
+  modules:
+    - rgi
+  conda: 
+    - RGI
+  jobname: 'rgi'
+
+
+
+
+

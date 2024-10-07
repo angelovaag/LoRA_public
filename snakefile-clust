@@ -1,0 +1,1342 @@
+### LongRead/minION pipeline
+### Design, development & eventual documentation
+### Angelina Angelova PhD**, Metagenomics Analysis Specialist, Science Support Section, BCBB/OCICB/OSMO/OD/NIAID/NIH
+### Duc Doan**, Software Engineer, Bioinformatics Software Section, BCBB/OCICB/OSMO/OD/NIAID/NIH
+###### inspired by: 10.1128/spectrum.03328-22 ...and some WGSA2
+
+configfile: "config.yaml"
+include: "/home/angelovaag/MyScripts/minION_pipeline/longRead_snk-clust/utils-clust.smk"
+
+######## ================ proj CONFIG ================ ######### 
+
+
+readsSTR = config["readsDIR"] + "{sampName}" + config["readSFFX"] + config["readsEXT"]
+# readsSTR = " ".join(expand(config["readsDIR"] + "{fqNames}", fqNames=fastqNames ))
+# readsSTR = config["readsDIR"] + "{fastqNames}"
+
+decontDIR = "decontam/"
+asmbDIR = config["MAIN_ASMB_DIR_NAME"] + "{sampName}_asmb/"
+taxSUFFIX = config["TAXdbNAME"] + "/"
+taxDB     = config["TAXdbNAME"]
+asmbTAX_DIR = asmbDIR + "asmbTAX/" + taxSUFFIX
+TAXprof_DIR = "profilesTAX/" + taxSUFFIX
+TAXplotsDIR = TAXprof_DIR + "DivPlots/"
+
+
+pipeline_output = [
+		expand(decontDIR + "{sampName}_contamLOG.txt", 		     sampName=samples),
+		expand(asmbDIR	 + "{sampName}_assembly.fasta",   		 sampName=samples),
+		expand(asmbDIR	 + "{sampName}_assembly.bam",	 		 sampName=samples),
+		expand(asmbDIR	 + "{sampName}_assemblySUMMARY.txt", 	 sampName=samples),
+		expand(asmbDIR	 + "{sampName}_assemblySUMMARY_" + taxDB + ".txt", sampName=samples), ## appended TAX will depend on taxDB
+		expand(asmbTAX_DIR + "{sampName}_taxREPORT.txt", 		 sampName=samples),
+		 	   TAXprof_DIR + "asmbTAX_plots.html",                                  #works on 1 and multiple samples
+		 	   TAXprof_DIR + "asmbTAX_mergedTAB_wLIN.txt",
+		 	   TAXprof_DIR + "asmbTAX_mergedTAB_json.biom",
+	]
+
+if len(samples) > 1:
+	pipeline_output.extend([
+			TAXplotsDIR + "TAX_divPLOTs.done",
+	])
+
+
+# readTAX = config["readTAX"]  # not very accurate as abundance for long reads
+# if readTAX:
+# 	READS_TAX = "readsTAX/"
+
+# 	pipeline_output.extend([	
+# 		expand(READS_TAX + "readsTAX.html" , sampName=samples),
+# 	])
+
+
+bin_w_checkM = config["bin_w_checkM"]
+if bin_w_checkM:
+	MAGsDIR = asmbDIR + "MAGs/"
+	MAGs_QA = MAGsDIR + "magsQA/"
+
+	pipeline_output.extend([
+		expand(MAGsDIR + "binsList.txt",	 sampName=samples),
+		expand(MAGs_QA + "magQA_SUMMARY.txt", sampName=samples),
+		expand(MAGs_QA + "magQA_COVERAGE.txt", sampName=samples),
+		expand(MAGs_QA + "magQA_PROFILES.txt",  sampName=samples),
+		expand(asmbDIR + "{sampName}_assemblySUMMARY_" + taxDB + "_wBINqc.txt", sampName=samples)
+	])
+
+	GTDBtk = config["GTDBtk"] ## require bin_w_checkM = T
+	if GTDBtk:
+		GTDBtk_DIR = MAGsDIR + "magsTAX/"  #### MAGsDIR + "TAX_GTdb/" ### 
+
+		pipeline_output.extend([
+			expand(GTDBtk_DIR + "GTdb-TAX.summary.tsv", sampName=samples),
+			expand(GTDBtk_DIR + "{sampName}_magTAXplots_GTdb.html", sampName=samples),
+			expand(asmbDIR + "{sampName}_assemblySUMMARY_" + taxDB + "_wBINqc_wGTdb.txt", sampName=samples),
+			expand(MAGs_QA + "magQA_SUMMARY_wGTdb.txt", sampName=samples),
+
+		])
+
+
+	CheckM_plots = config["CheckM_plots"] ## require bin_w_checkM = T
+	if CheckM_plots:
+		MAGPLOTs=MAGs_QA + "plots/"
+		
+		pipeline_output.extend([
+			expand(MAGPLOTs + "checkmPlots.done",  sampName=samples)
+		]) ## not really compatible with checkm2
+
+	blobPlots = config["blobPlots"] ## require bin_w_checkM = T
+	if blobPlots:
+		blobsDIR = MAGs_QA + "blobPlots/"
+		
+		pipeline_output.extend([
+			expand(blobsDIR + "blobs.done", sampName=samples),
+		])
+
+
+PREDICT_FUNCTION = config["PREDICT_FUNCTION"]
+if PREDICT_FUNCTION:
+	PWYS_DIR=  asmbDIR + "asmbPWY/"		  ## main genes & pathways folder
+	FEAT_DIR = PWYS_DIR + "features/"		 ## predicted features
+	ANNOT_DIR= PWYS_DIR + "annotations/"	 ## annotations for predicted features (making them genes)
+	feature_prefix = FEAT_DIR + "feature"	## prefix for predicted features
+		
+	if config["annots_type"] == "KO":
+		annoMAP_file=config["koMAP_file"]
+		hrrFILE=config["koHRR_file"]
+		# ANNO2PWY="ko2gg"
+		pwyDB="KEGG"
+	else:
+		annoMAP_file=config["ecMAP_file"]
+		hrrFILE=config["ecHRR_file"]
+		# ANNO2PWY="ec2mc"
+		pwyDB="MetaCyc"
+
+	minPATH_DIR  = PWYS_DIR + "pathways/" + pwyDB + "/"	        ## wdir for minpath
+	
+	PWYprof_DIR = "profilesPWY/" + pwyDB + "/"			 		## main pwy profiles 
+	PWYprof_BIN  = PWYprof_DIR + "pwyBIN" + "/"	   				## bin for all pwy files
+	PWYprof_PLOTS= PWYprof_DIR + "DivPlots/" 
+
+	pipeline_output.extend([
+		expand(feature_prefix + ".gtf", sampName=samples ),
+		expand(ANNOT_DIR + "annots.emapper.annotations", sampName=samples),
+		expand(feature_prefix + "_counts_wTPM.txt", sampName=samples),
+		expand(PWYS_DIR + "genesSUMMARY.txt", sampName=samples),
+		expand(PWYS_DIR + "genesKO.fna", sampName=samples),
+		expand(PWYS_DIR + "genesEC.faa", sampName=samples),
+		expand(PWYS_DIR + "{sampName}_aveGEN.ko.txt", sampName=samples),
+		expand(PWYS_DIR + "{sampName}_aveGEN.ec.txt", sampName=samples),
+		expand(PWYprof_DIR + "merged_aveGEN.ko_table.txt"),
+		expand(PWYprof_DIR + "merged_aveGEN.ec_table.txt"),
+		expand(minPATH_DIR + "minPATH.report.txt", sampName=samples),
+		expand(minPATH_DIR + "complete_pathways.txt", sampName=samples),
+		expand(minPATH_DIR + "{sampName}_4krona.txt", sampName=samples),
+		PWYprof_DIR + "asmbPWYs_"+ pwyDB + "_plot.html",
+		PWYprof_DIR + "merged_avePWY." + pwyDB + "_table.txt",
+		PWYprof_DIR + "merged_avePWY." + pwyDB + "_json.biom",
+	])
+
+	if len(samples) > 1:
+		pipeline_output.extend([
+			PWYprof_PLOTS  + "PWY_divPLOTS.done"
+			])
+
+	runRGI = config["runRGI"] ## requires PRED_FUNC == T
+	if runRGI:
+		RGI_DIR=PWYS_DIR + "RGI/"
+		pipeline_output.extend([
+			expand(RGI_DIR + "rgiFNA_main.txt", sampName=samples),
+			])
+
+
+rule all:
+	input:
+		pipeline_output,
+
+
+
+## settings for FLYE and MINIMAP2, that depend on SEQ_TYPE 
+## --nano-raw expects seq.fq.gz reads
+## --read-error can be "", but I want to leave the option for SMEs
+if config["SEQ_TYPE"] == "ONT" and config["DATA_QUAL"] == "RAW":
+    FLYE_MODE = "--nano-raw "
+    FLYE_QUAL = "" ## cannot be used with RAW
+    MAP_MODE = "map-ont"
+elif config["SEQ_TYPE"] == "ONT" and config["DATA_QUAL"] == "HQ":
+    FLYE_MODE = "--nano-hq"
+    FLYE_QUAL = "" ## "--read-error 0.03 " [default]
+    MAP_MODE = "map-ont"
+elif config["SEQ_TYPE"] == "ONT" and config["DATA_QUAL"] == "CORR":
+    FLYE_MODE = "--nano-corr"
+    FLYE_QUAL = "" ## "--read-error <unknown> " ## may not be usable
+    MAP_MODE = "map-ont"
+elif config["SEQ_TYPE"] == "PB" and config["DATA_QUAL"] == "RAW":
+    FLYE_MODE = "--pacbio-raw "
+    FLYE_QUAL = "" ## this can only be used in HQ or CORR mode
+    MAP_MODE  = "map-pb"
+elif config["SEQ_TYPE"] == "PB" and config["DATA_QUAL"] == "HQ":
+    FLYE_MODE = "--pacbio-hifi"
+    FLYE_QUAL = "" ## --read-error 0.001 " [default]
+    MAP_MODE  = "map-pb"
+elif config["SEQ_TYPE"] == "PB" and config["DATA_QUAL"] == "CORR":
+    FLYE_MODE = "--pacbio-corr"
+    FLYE_QUAL = "" ## --read-error <unknown ?0> " 
+    MAP_MODE = "map-pb"
+    
+
+
+#############  --------- START of PIPELINE ------------- ########
+rule decontam:
+	threads: 	 clust_conf["decontam"]["threads"]
+	envmodules: *clust_conf["decontam"]["modules"] ## add * if cluster modules are in new lines
+	input:
+		inFQfile = readsSTR,
+	params:
+		decontamDB = config["decontamDB"],
+		confidence = config["hostCONF"], 
+	log:
+		deconLOG = decontDIR + "{sampName}_contamLOG.txt",
+		deconRPT = decontDIR + "{sampName}_contamREPORT.txt"
+	output:
+		deconFQ = temp(decontDIR + "{sampName}_decontam.fastq"),
+		deconGZ = decontDIR + "{sampName}_decontam.fastq.gz",
+	shell: """
+		echo "------> HOST detection & removal"
+		mkdir -p {decontDIR} 
+		kraken2 --use-names --gzip-compressed --threads {threads} \
+			   --confidence {params.confidence} --db {params.decontamDB} \
+			   --report {log.deconRPT} --unclassified-out {output.deconFQ} \
+			   --output - {input.inFQfile} 2>> {log.deconLOG}
+		echo "------> zipping me some squeaky clean FASTQ files zippidy zip zip!!"
+		pigz -c -p {threads} {output.deconFQ} > {output.deconGZ} 
+		"""
+
+
+rule assembly:
+	threads:	 clust_conf["assembly"]["threads"] 
+	envmodules: *clust_conf["assembly"]["modules"]
+	input:
+		inGZ = ancient(rules.decontam.output.deconGZ),
+	params:
+		tmpDIR = TMP_DIR,
+		tmpINF = TMP_DIR + "{sampName}_decontam.fastq.gz",
+		outDIR = asmbDIR,
+		flye_mode = FLYE_MODE,
+		flye_qual = FLYE_QUAL,
+		iterations = config["asmb_polish_steps"],
+	log:
+		asmbDIR + "{sampName}_flyeLOG.txt"
+	output:
+		asmbFASTA = asmbDIR + "{sampName}_assembly.fasta",
+		asmbINFO  = asmbDIR + "{sampName}_assemblyINFO.txt",
+	shell:  """
+		mkdir -p {params.outDIR}
+		time cp {input.inGZ} {params.tmpDIR}/
+		
+		echo "------> starting assembly with of with metaFlye"
+		flye --meta {params.flye_mode} {params.tmpINF} --out-dir {params.tmpDIR} \
+		--threads {threads} --iterations {params.iterations} {params.flye_qual}
+		
+		time cp {params.tmpDIR}/assembly.fasta	   {output.asmbFASTA}
+		time cp {params.tmpDIR}/assembly_info.txt  {output.asmbINFO}
+		time cp {params.tmpDIR}/flye.log		   {log}
+		""" 
+		### metaFlye creates {output.asmbFASTA} & {output.asmbINFO}
+		##--read-error {params.readERR}
+		##readERR = "", ###  "--read-error <value>" , is to be used only with --nano-hq or --pacbio-hifi
+		### where <value> == "0.03" for --nano-hq; and "0.001" is to be used with  --pacbio-hifi
+		
+
+rule minimap_index:
+	threads:	 clust_conf["minimap_index"]["threads"] 
+	envmodules: *clust_conf["minimap_index"]["modules"] 
+	input:
+		asmbFASTA=ancient(rules.assembly.output.asmbFASTA),
+	output:
+		mmiFILE=rules.assembly.output.asmbFASTA + ".mmi"
+	params:
+		basesInMEM_K="100G",
+		basesInMEM_I="100G",
+		map_mode = MAP_MODE,
+		kmerSIZE=15,					## max is 28 for minimap2
+	log:
+		mapLOG=asmbDIR + "assembly_mapLOG.txt",
+	shell:"""
+		echo $'-----> mm2 index prep \n' 
+		echo $'-----> mm2 index prep \n' > {log.mapLOG}
+		minimap2 -x {params.map_mode}  -I {params.basesInMEM_I} \
+			-K {params.basesInMEM_K} -k {params.kmerSIZE} \
+ 			-d {output.mmiFILE}  {input.asmbFASTA} 2>> {log.mapLOG} 
+		"""
+
+
+rule minimap2bam: ## ~16min/sample
+	threads:	 clust_conf["minimap2bam"]["threads"] - 2 ## some breathing room
+	envmodules: *clust_conf["minimap2bam"]["modules"]
+	input:
+		mmiFILE=ancient(rules.minimap_index.output.mmiFILE),
+		deconGZ=ancient(rules.decontam.output.deconGZ),
+	params:
+		basesInMEM_K="100G",
+		map_mode = MAP_MODE,
+		basesInMEM_I="100G",
+		kmerSIZE=15,					## max is 28 for minimap2
+		samFILE=temp(asmbDIR + "assembly.sam"),
+		mem="4G"
+	log:
+		mapLOG=rules.minimap_index.log.mapLOG,
+	output:
+		bamFILE=asmbDIR + "{sampName}_assembly.bam"
+	shell:"""
+		echo $'-----> minimap2 mapping \n' 
+		echo $'-----> minimap2 mapping \n' >> {log.mapLOG}
+		minimap2 -t {threads} -I {params.basesInMEM_I} \
+				-K {params.basesInMEM_K} -k {params.kmerSIZE} \
+				-ax {params.map_mode} {input.mmiFILE}  {input.deconGZ} \
+				-o {params.samFILE} 2>> {log.mapLOG}
+		samtools sort --write-index {params.samFILE} -o {output.bamFILE} \
+				-@ {threads} -m {params.mem}
+		samtools index -b {output.bamFILE} -@ {threads}
+		rm -f {params.samFILE}
+		"""
+
+
+rule getDEPTHS:
+	envmodules: *clust_conf["getDEPTHS"]["modules"]
+	threads: clust_conf["getDEPTHS"]["threads"]
+	input:
+		asmbINFO  = rules.assembly.output.asmbINFO,
+		bamFILE=rules.minimap2bam.output.bamFILE,
+	params:
+		percID = 75, ## min%ID for end-to-end aligned reads to count (def:97% produces baseCOV==0)
+		awkRPK =r'NR==1{ print $0, "\tRPK"; next }{ printf "%s\t%.3f\n", $0, $3*1e3/$2 }',
+	output:
+		tmp1=temp(asmbDIR + "_tmp1_asmbDep0.txt"),
+		tmp2=temp(asmbDIR + "_tmp2_contDep0.txt"),
+		tmp3=temp(asmbDIR + "_tmp_baseDep0.txt"), 
+		depthFILE=asmbDIR + "{sampName}_assemblyDepth.txt",
+		tmp4=temp(asmbDIR + "_tmp4_readDep0.txt"), #temp()
+		tmp5=temp(asmbDIR + "_tmp5_readDep1.txt"), #temp()
+	log:
+		aliLOG=asmbDIR + "assembly_aliLOG.txt",
+	shell: """
+		echo '------> getting asmbDepth from assemblyINFO.txt '
+		cat {input.asmbINFO} | cut -f1-6 > {output.tmp1} 
+
+		if command -v bbtools >/dev/null 2>&1; then  ## checks if bbtools or pileup.sh
+			echo $'-------> getting contCov with bbtools::pileup \n'
+			echo $'-------> getting contCov with bbtools::pileup \n' > {log.aliLOG}
+			bbtools pileup in={input.bamFILE}  out={output.tmp2} \
+					overwrite=true threads={threads} 2>> {log.aliLOG}
+		else 
+			echo $'-------> getting contCov with pileup.sh \n'
+			echo $'-------> getting contCov with pileup.sh \n' > {log.aliLOG}
+			pileup.sh in={input.bamFILE}  out={output.tmp2} \
+					overwrite=true threads={threads} 2>> {log.aliLOG}
+		fi
+
+		echo '-------> creating the baseCov with metabat2::jgi_depths script'
+		jgi_summarize_bam_contig_depths {input.bamFILE} \
+				--percentIdentity {params.percID} \
+		 		--outputDepth {output.depthFILE} || touch {output.depthFILE}
+		cut -f 1-3 {output.depthFILE} > {output.tmp3}
+
+
+		echo '-------> getting readCounts with samtools::idxstats '
+		samtools idxstats {input.bamFILE} -@ {threads} > {output.tmp4}
+		## sort for proper header relocation & calculate RPK
+		sort  {output.tmp4} | sed 's/^\\*.*/#seq_name\\tLength\\tReads/' |\
+			cut -f1-3 | awk -F'\\t' '{params.awkRPK}' > {output.tmp5}
+		"""
+		## awk -F'\\t' 'NR==1 {{ print $0, \"\\tRPK\"; next }} \
+		## {{ printf \"%s\\t%.3f\\n\", $0, $3*1e3/$2 }}' \
+
+		## if bbtools -v ls check if command bbtools is present or should pileup.sh be used directly
+
+
+rule asmbSUMMARY:
+	input:
+		tmp1=rules.getDEPTHS.output.tmp1,
+		tmp2=rules.getDEPTHS.output.tmp2,
+		tmp3=rules.getDEPTHS.output.tmp3,
+		tmp5=rules.getDEPTHS.output.tmp5,
+	output:
+		tmp1=temp(asmbDIR + "_tmp1_asmbDep2.txt"), ## temp()
+		tmp2=temp(asmbDIR + "_tmp2_contDep2.txt"), ## temp()
+		tmp3=temp(asmbDIR + "_tmp3_baseDep2.txt"), ## temp()
+		tmp5=temp(asmbDIR + "_tmp5_readDep2.txt"), ## temp()
+		sumFILE=  asmbDIR + "{sampName}_assemblySUMMARY.txt",
+	shell:"""
+		echo '------> sorting asmbDepth, Scaff/ContigDepth, baseDepth & readDepth files consistent order'
+		## keeping headers intact
+		{{ head -n 1 {input.tmp1} && tail -n +2 {input.tmp1} |sort -V ;  }} > {output.tmp1}
+		{{ head -n 1 {input.tmp2} && tail -n +2 {input.tmp2} |sort -V ;  }} > {output.tmp2}
+		{{ head -n 1 {input.tmp3} && tail -n +2 {input.tmp3} |sort -V ;  }} > {output.tmp3} 
+		{{ head -n 1 {input.tmp5} && tail -n +2 {input.tmp5} |sort -V ;  }} > {output.tmp5} 
+		
+		echo '------> joining sorted asmbDepth, Scaff/ContigDepth, baseDepth & readDepth files \n'
+		paste {output.tmp1} {output.tmp2} {output.tmp3} {output.tmp5} | sed '1s/\\.//g' |sed '1s/Read_GC/GC/g' | \
+		awk -v OFS='\t' '{{print $18,$4,$5,$6,$19,$23,$13,$14,$15,$3,$24,$12,$8,$16,$17,$20}}' > {output.sumFILE}
+		"""
+		# in SNAKEMAKE AWK commands use {{}}. "" are excaped with \, but '' are acceptable as is.
+
+
+rule asmbTAX_Kraken2:
+	threads: clust_conf["asmbTAX_Kraken2"]["threads"]
+	envmodules: *clust_conf["asmbTAX_Kraken2"]["modules"]
+	input: 
+		fas = ancient(rules.assembly.output.asmbFASTA), ### do NOT expand(..., sampName=samples) or input becomes all samples for each sample!!!!
+		fake= ancient(rules.asmbSUMMARY.output.sumFILE, ## do NOT expand(..., sampName=samples) !!!! #asmbTAX_Kraken2   workflow order
+	params:
+		classDBpath=config["TAXdbPATH"],
+		classDBname=config["TAXdbNAME"],
+		confdc=config["taxCONF"],
+		outDIR=asmbTAX_DIR,
+	log:
+		asmbTAX_DIR + "{sampName}_classLOG.txt",
+	output:
+		klog=temp(asmbTAX_DIR + "_tmp_klog.txt"), ##temp
+		rprt=asmbTAX_DIR + "{sampName}_taxREPORT.txt",
+	shell: """
+		echo '------> running asmbTAX classification with {params.classDBname} \n'
+		mkdir -p {params.outDIR} 
+			kraken2 --use-names --db {params.classDBpath} --confidence {params.confdc}  \
+				--threads {threads} --output {output.klog} --memory-mapping \
+				--report {output.rprt} {input.fas} 2>> {log}
+		"""
+
+rule asmbTAX_addTAX_to_sumFILE:
+	input:
+		klog=rules.asmbTAX_Kraken2.output.klog, 
+		scov=rules.asmbSUMMARY.output.sumFILE,
+	params:
+		dbName=config["TAXdbNAME"],
+	output:
+		sumFILE=asmbDIR  + "{sampName}_assemblySUMMARY_" + taxDB + ".txt",  ## appended TAX will depend on taxDB
+		tmp=temp(asmbTAX_DIR + "_tmp_ktax.txt"),  ##temp
+	shell:"""
+		cut -f2-3 {input.klog} | sed -e 's/ (taxid /\\t/g' | sed -e 's/)$//g' | sort -V | \
+		sed '1s/^/#contigName\\tTAXname\\tTAXid\\n/' > {output.tmp} && \
+		paste {input.scov} <(cut -f2-3 {output.tmp}) > {output.sumFILE}
+		"""
+
+rule asmbTAX_kronaText:
+	input:
+		smr=rules.asmbTAX_addTAX_to_sumFILE.output.sumFILE,	
+	params:
+		kronaBIN=TAXprof_DIR + "kronabin/",
+	output:
+		TAXprof_DIR + "kronabin/{sampName}_4krona.txt",
+	shell:	"""
+		## selects assembly: contigNAme, fltReadsMapped & TaxonomyID 
+		## collect ouptut in kronaBin
+
+		mkdir -p {params.kronaBIN} 
+		cut -f1,10,18 {input.smr} | sed '1s/contigName/#contigName/' > {output}
+		"""
+		## cut -f1,11,18 {input.smr} | sed '1s/contigName/#contigName/' > {output} ## using RPK
+		## cut -f1,10,18 {input.smr} | sed '1s/contigName/#contigName/' > {output} ## using coverage #s
+		## cut -f1,6,18  {input.smr} | sed '1s/contigName/#contigName/' > {output} ## using read #s
+		## checkM's fltReadsMapped are the closest to real distribution, 
+		## but allReadsMapped is also very close ## used here as default
+
+
+rule asmbTAX_kronaPlot:
+	envmodules: *clust_conf["asmbTAX_kronaPlot"]["modules"]
+	threads: clust_conf["asmbTAX_kronaPlot"]["threads"]
+	input:
+		expand(rules.asmbTAX_kronaText.output, sampName=samples),
+	params:
+		kronaBIN=TAXprof_DIR + "kronabin/",
+		kroTAXdb=config["TAXDUMP_PATH"], # kroTAXdb=config["kroTAXtab"],
+	output:
+		TAXprof_DIR + "asmbTAX_plots.html"
+	shell: """
+		ktImportTaxonomy {params.kronaBIN}/*.txt -q 1 -t 3 -m 2 \
+				-o {output} -tax {params.kroTAXdb}
+		"""
+
+
+
+rule asmbTAX_mergeTABs: ## this will work for single and multiple samples
+	envmodules: *clust_conf["asmbTAX_mergeTABs"]["modules"]
+	input:
+		kroTEXT=ancient(expand(rules.asmbTAX_kronaText.output, sampName=samples)),
+		# fake   = (rules.asmbTAX_kronaPlot.output) ##workflow organization
+	output:
+		mTAB_noLIN=temp(TAXprof_DIR + "asmbTAX_mergedTAB.txt"), ## temp() ##no lin
+		mTAB_wLIN=TAXprof_DIR + "asmbTAX_mergedTAB_wLIN.txt",
+	params: 
+		kroBIN=temp(TAXprof_DIR + "kronabin/"), #in params, wont clean, but in output.dir is problem
+		mergeTABscriptR=config["TAX_mergeR_script"],   # R script uses {sampName} from _4krona.txt files
+		mergeTABscriptPY=config["mergeTABLES_script"], #PY script uses {sampName} from _4krona.txt files
+		out_dir=TAXprof_DIR,
+		fileSuffix="_4krona.txt",
+		addLINscript=config["addLINEAGE_script"], ## script adds lineage to merged_table
+		taxonKitDB=config["TAXDUMP_PATH"],  #taxonKitDB=config["TAXONKIT_DB"], ## the taxdmp directory
+		taxIDfield=1,
+		tmp_dir = TMP_DIR,
+	shell: """
+		echo '------> merging asmbTAX tables with R script \n'
+		## copy _4kronaTAX files in 1 dir (needed for py script)
+		# mkdir -p {params.kroBIN} && cp {input.kroTEXT} {params.kroBIN} ## done in prev rule
+		
+		Rscript {params.mergeTABscriptR} --binDIR {params.kroBIN} \
+			--suffix {params.fileSuffix} --outTAB {output.mTAB_noLIN} || \
+		python3 {params.mergeTABscriptPY} -d {params.kroBIN} -o {output.mTAB_noLIN}
+
+
+		echo '--------> adding lineage info to merged asmbTAX table \n'
+		## copy _4kronaTAX files in 1 dir (needed for py script)
+		## add lineage (uses taxonkit)
+		bash {params.addLINscript} {output.mTAB_noLIN} {params.taxonKitDB} \
+				{params.taxIDfield} {threads} {params.tmp_dir} > {output.mTAB_wLIN}
+		"""
+		## as a backup, if the R script fails to merge, the snake will use the python
+
+
+rule asmbTAX_biomTABs: 
+	envmodules: *clust_conf["asmbTAX_biomTABs"]["modules"]
+	input:
+		rules.asmbTAX_mergeTABs.output.mTAB_wLIN,
+	params:
+		tabtype="OTU table",
+		nsamp  = 2 + len(samples), #greps TAXid {SampNames} & Lineage
+	output:
+		txt=temp(TAXprof_DIR + "_tmp_4biom.txt"),
+		biom=TAXprof_DIR + "asmbTAX_mergedTAB_json.biom"
+	shell:"""
+		cut -f1-{params.nsamp} {input} | sed '1s/Lineage/taxonomy/' > {output.txt} && \
+		biom convert -i {output.txt} -o {output.biom} --to-json \
+				--table-type='{params.tabtype}' --process-obs-metadata taxonomy
+		"""
+		## THIS ACTUALLY WORKED FIRST!!
+
+
+if len(samples) > 1:
+	rule asmbTAX_divPLOTs:
+		envmodules: *clust_conf["asmbTAX_divPLOTs"]["modules"]
+		input:
+			mergedTAB=rules.asmbTAX_mergeTABs.output.mTAB_wLIN,
+			mapping_file=config["map_file"],
+		params:
+			TAX_divR_script=config["TAX_divR_script"],
+			tmp_map=temp(TAXplotsDIR + "tmp_map.txt"),
+			outDIR=TAXplotsDIR,
+			inDIR=TAXprof_DIR,
+		output:
+			done=TAXplotsDIR + "TAX_divPLOTs.done",
+			pdf=TAXplotsDIR + "TAX_BetaDiv_PCoA.pdf",
+		log: TAXprof_DIR + "DivPlots.Rlog.txt"
+		shell:"""
+			echo '\n ------> asmbTAX divPlots for datasets with 2+ samples \n'
+
+			Rscript {params.TAX_divR_script} --mTABfile {input.mergedTAB} \
+			--mfile {input.mapping_file} --outdir {params.outDIR} || \
+				echo "ERROR: Failed to generate TAX_divPLOTs" 2>> {log}
+
+			touch {output.done}
+			"""
+			# sed '1s/#//' {input.mapping_file} > {params.tmp_map}
+
+
+
+### ======================= ### ============================= ## ======================
+
+
+### ================= start binning_w_checkM section =================
+
+if bin_w_checkM: 
+	
+	rule binning: # keep bins focused at prok & euk. exlude vir (we have pipeline for that)
+		threads: clust_conf["binning"]["threads"]
+		envmodules: *clust_conf["binning"]["modules"]
+		input:
+			depthFILE=rules.getDEPTHS.output.depthFILE,
+			asmbFASTA=rules.assembly.output.asmbFASTA,
+			# done_asmbTAX_biom=rules.asmbTAX_biomTABs.output.biom, ### workflow organizational
+		log: MAGsDIR + "binningLog.txt",
+		params:
+			binDIR=MAGsDIR,
+			basename="mag",	##MAGsDIR + "mag",
+			# minCov=0.5,   ### def:1 ## sets minCOVERAGE of contigs for binning (only if depthFILE)
+			maxEdges = 200, ## def: 200
+			maxP = 70, ## def: 95 #sets % good contigs chosen for binning
+			minCntLEN=1500, ## def: 2.5K #set min contig length for binning)
+			minBINsz = 200000, ## def: 200K # sets min size of output bins   ##---> can be a user setting
+		output:
+			binsList = MAGsDIR + "binsList.txt",
+		shell:	"""
+			metabat -i {input.asmbFASTA} -o {params.binDIR}/{params.basename} -m {params.minCntLEN}  \
+				--maxEdges {params.maxEdges} --maxP {params.maxP} --minClsSize {params.minBINsz} \
+				--unbinned  -t {threads} && echo 'binning done. file not empty' > {log}
+			find {params.binDIR} -type f -empty -delete 
+		 	find  {params.binDIR}/*.fa -type f ! -empty |xargs basename -a -s .fa > {output.binsList}
+		 	"""
+		 	### --minCV {params.minCov} --abdFile {input.depthFile} \
+		 	### --abdFile {input.depthFile} ## depends too much on the depths, which vary with settings
+		 	### --minCV {params.minCov}  is only used if depthFILE
+
+
+
+	# ## -------------------------------------------
+	# ## ------------- checkM crap -----------------
+	# ## -------------------------------------------
+	rule checkM2_summary:
+		envmodules: *clust_conf["checkM2_summary"]["modules"]
+		threads: clust_conf["checkM2_summary"]["threads"]
+		conda: *clust_conf["checkM2_summary"]["conda"]
+		input:
+			binList= rules.binning.output.binsList,
+			bamFILE= rules.minimap2bam.output.bamFILE,
+		params:
+			tmp_dir= TMP_DIR + "{sampName}/",
+			tmp_qa = TMP_DIR + "{sampName}/magsQA",
+			binDIR = MAGsDIR,
+			binEXT =".fa",
+			outDIR = MAGs_QA
+		output:
+			binSUM=MAGs_QA + "magQA_SUMMARY.txt"
+		log: 
+			TMP_DIR + "{sampName}/magsQA/checkm2LOG.txt"
+		shell: """
+		mkdir -p {params.tmp_dir}
+		time cp -r {params.binDIR} {params.tmp_dir}/MAGs
+		echo '------> running checkm2 as a replacement of checkm1 workflow'
+		time checkm2 predict --threads {threads} --input {params.tmp_dir}/MAGs/ \
+				--tmpdir {params.tmp_dir} -x {params.binEXT} --force \
+				--output-directory {params.tmp_qa} 1>> {log} && \
+		time cp -r {params.tmp_qa} {params.binDIR} && \
+		cut -f 1-3,6-13 {params.outDIR}/quality_report.tsv > {output.binSUM} \
+		|| echo "---> No DIAMOND annotation was generated (by checkm2)" > {output.binSUM}
+		"""
+
+	# Too much crap logs, using 2>/dev/null
+	rule checkM_coverge_and_profiles:
+		threads: clust_conf["checkM_coverge_and_profiles"]["threads"]
+		envmodules: *clust_conf["checkM_coverge_and_profiles"]["modules"]
+		input:
+			bam   = rules.minimap2bam.output.bamFILE,
+			fake1 = rules.checkM2_summary.output.binSUM, # not used but needs to be present metabat2_run step
+			scov  = rules.asmbTAX_addTAX_to_sumFILE.output.sumFILE,
+		params:
+			ftype="fa",
+			mag=MAGsDIR,
+			minALI=0.1, ## def: 0.98 too high for ONTdata; set to 1% of the contigLen
+			minQC=10,  ## def: 15 
+			maxDIST=1, ## def: 0.02 too low for ONTdata; set to max dist
+			sedSTR=r'1s/Bin Id\tCoverage\tMapped reads/inMAG\tFltCOV\tFltReadsMapped/g'
+		output:
+			covR=MAGs_QA + "magQA_COVERAGE.txt",
+			proF=MAGs_QA + "magQA_PROFILES.txt",
+			tmp=temp(MAGs_QA + "_tmp1.txt"),
+			sumFILE=asmbDIR  + "{sampName}_assemblySUMMARY_" + taxDB + "_wBINqc.txt",
+		shell:	"""
+			echo '------> running checkM coverage set for ONT bins'
+			checkm coverage -x {params.ftype} -t {threads} --all_reads \
+				--min_align {params.minALI} --min_qc {params.minQC} --max_edit_dist {params.maxDIST} \
+				{params.mag} {output.covR} {input.bam} 2>/dev/null
+
+			echo '------> running checkM profiles from coverage file'
+			checkm profile -q --tab_table {output.covR} -f {output.proF}
+
+
+			echo '------> adding binCOVR info (binQC) to asmbSUMMARY file'
+			cat {output.covR} | cut -f 1,2,5,6 |sort -k1 -V | \
+				sed '{params.sedSTR}' > {output.tmp}
+			paste {input.scov} {output.tmp} |cut -f 1-18,20-22 > {output.sumFILE}
+			"""
+
+	if CheckM_plots:
+		rule checkm_plots:
+			envmodules: *clust_conf["CheckM_plots"]["modules"]
+			input:
+				in1=rules.binning.output.binsList, # need for MAG
+				in2=rules.checkM2_summary.output.binSUM # need for MAGs_QA
+			params:
+				ftype="fa",
+				mag=MAGsDIR,
+				mag_qa=MAGs_QA,
+				out=MAGPLOTs
+			log: MAGPLOTs + "checkm.log"
+			output:
+				MAGPLOTs + "checkmPlots.done" #marks completion
+			shell:"""
+				checkm coding_plot --image_type pdf  -x {params.ftype} \
+					{params.mag_qa} {params.mag} {params.out} 95 || true
+				checkm marker_plot --image_type pdf  -x {params.ftype} --dpi 400 \
+					{params.mag_qa} {params.mag} {params.out} || true
+				checkm nx_plot	 --image_type pdf  -x {params.ftype} \
+					{params.mag} {params.out} || true
+				touch {output}
+				"""
+## =================== done bin_w_checkM section =========== 
+
+
+
+
+	## =========== starting GTdbtk section ============== ## requires bin_w_checkM = T
+	if GTDBtk: 
+		rule magTAX_GTdbtk:
+			threads: clust_conf["magTAX_GTdbtk"]["threads"]
+			envmodules: *clust_conf["magTAX_GTdbtk"]["modules"]
+			input:
+				binsList=rules.binning.output.binsList, #needs to be
+			output:
+				done =GTDBtk_DIR + "GTdb-tk.done",
+				sumry=GTDBtk_DIR + "GTdb-TAX.summary.tsv",
+			params:
+				# doneCheckM=expand(rules.checkM_kronaPlot.output,sampName=samples), ## workflow organization
+				gDIR = MAGsDIR,
+				outDIR = GTDBtk_DIR,	
+				minPERCaa = 10,  ##' def:10
+				ext = "fa",
+			shell: """
+				echo "-----> running tax assignments of MAGs with GTdb-tk on bins in {params.gDIR}"
+				
+				gtdbtk classify_wf --genome_dir {params.gDIR} --out_dir {params.outDIR} \
+					--skip_ani_screen --min_perc_aa {params.minPERCaa} --cpus {threads} \
+					--pplacer_cpus {threads} --extension {params.ext} && touch {output.done}
+				
+				## cat results together
+				cat {params.outDIR}/gtdbtk*summary.tsv | \
+				sed 's/user_/00user_/g' |sort -V -u |sed '1s/00user/user/' > {output.sumry}
+				
+				## some organization
+				mkdir -p {params.outDIR}/logs
+				mv {params.outDIR}/gtdbtk.* {params.outDIR}/logs
+				"""
+
+
+		rule magTAX_GTdb_kronaText:
+			input:
+				GTsmr=rules.magTAX_GTdbtk.output.sumry,
+				CMsmr=rules.checkM2_summary.output.binSUM,
+			output:
+				krntxt=(GTDBtk_DIR + "{sampName}_4krona.txt"),  ## rm "_4krona.txt" string temp
+				magSUM = MAGs_QA + "magQA_SUMMARY_wGTdb.txt",
+			shell:	"""
+				## pasate the ChM-summary file with GTdb TAXonomy
+				paste {input.CMsmr} <(cut -f2 {input.GTsmr}) | \
+				sed '1s/classification/Taxonomy (GTdb)/' > {output.magSUM}
+				## selects NumbReads &  & Taxonomy (GTdb) from new magSUMMARY+GTdb file
+				cut -f3,12 {output.magSUM} | sed -e 's/..__/\\t/g' | \
+					sed -e '1 s/^/#/' > {output.krntxt}
+				"""
+				## next step plots the lineage by tabs, has nothing to do with UID
+
+
+
+		rule magTAX_GTdb_kronaPlot:
+			envmodules: *clust_conf["magTAX_GTdb_kronaPlot"]["modules"]
+			input:
+				rules.magTAX_GTdb_kronaText.output.krntxt 
+			output:
+				GTDBtk_DIR + "{sampName}_magTAXplots_GTdb.html"
+			shell:
+				"ktImportText {input} -o {output}"
+
+
+		rule magTAX_add_GTdbTAX_to_sumFILE:
+			input:
+				file2=rules.checkM_coverge_and_profiles.output.sumFILE, #after checkmCOV is run, GTdb adds TAX to asmbSUM
+				file1=rules.magTAX_GTdb_kronaText.output.magSUM,
+			params:
+				awkSCR=r'BEGIN {FS=OFS="\t"} FNR==NR {map[$1]=$19; next} \
+						FNR==1 {print $0, "GTdb_tax"; next} \
+						$19 in map {print $0, map[$19]}'
+			# awkSCR_4nephele=r'BEGIN {FS=OFS="\t"} FNR==NR {map[$1]=$12; next} \
+			# 			FNR==1 {print $0, "GTdb_tax"; next} \
+			# 			$19 in map {print $0, map[$12]}'
+			output:
+				scovtax2= asmbDIR  + "{sampName}_assemblySUMMARY_" + taxDB + "_wBINqc_wGTdb.txt", ### asmbTAX_DIR
+			shell: """
+				awk '{params.awkSCR}' {input.file1} {input.file2} > {output.scovtax2}
+				"""
+	## =================== done GTDBtk =========== 
+
+	#### =================== start of blobplots ===============  ## require bin_w_checkM = T
+	if blobPlots:  
+		rule magTAX_blobs: ## works with blastn output, but here I trick it to use Kr2 output, using fltCOV as bitSCORE
+			threads: clust_conf["magTAX_blobs"]["threads"]
+			conda: *clust_conf["magTAX_blobs"]["conda"]
+			# envmodules: clust_conf["magTAX_blobs"].get("blobtools"),
+			input:
+				bamFILE = rules.minimap2bam.output.bamFILE,
+				binList = rules.binning.output.binsList,
+				scov	= rules.checkM_coverge_and_profiles.output.sumFILE,
+			output:
+				log = blobsDIR + "blobs.done"
+			params:
+				blobtools = clust_conf["magTAX_blobs"].get("blobtools"), ## or config["blobPATH"],
+				nodes = config["TAXDUMP_PATH"] + "/nodes.dmp", ## config["blobDB_nodes"],
+				names = config["TAXDUMP_PATH"] + "/names.dmp", ## config["blobDB_names"],
+				tmp = temp(blobsDIR + "_tmp_mag.txt"), ##temp
+				blobOUT = blobsDIR,
+				binDIR  = rules.binning.params.binDIR,
+				rank='family',
+			shell:"""
+				set -e
+				mkdir -p {params.blobOUT}
+				
+				for m in $(cat {input.binList} ); do
+					echo "----> working blobplot on ${{m}} from {params.binDIR}"
+					set -e
+					## grep contigNames(inMAG), TAXid ($1) &  fltCOV ($3)
+					## uses fltCOV as bitSCORE as in (qseqid\ttaxid\tbitscore)
+					cat {input.scov}  | grep "$m\t" |cut -f 1,18,20 > {params.tmp}
+					
+					blobtools create  -i {params.binDIR}/$m.fa -o {params.blobOUT}/$m \
+						-t {params.tmp} -b {input.bamFILE}  \
+						--nodes {params.nodes} --names {params.names} 	
+					blobtools view -i {params.blobOUT}/$m.blobDB.json \
+				 		-o {params.blobOUT}/$m.view			
+					blobtools plot -i {params.blobOUT}/$m.blobDB.json --rank {params.rank} \
+						-o {params.blobOUT}/$m.plot
+				
+				rm {params.tmp}
+				
+				done && touch {output.log}
+				
+				"""
+
+	### ============ done blobplots ===================
+
+
+
+# if readTAX: ## ============ readTAX (not very accurate for long reads) ===============
+# 	rule readTAX_run_Kraken2:
+# 		# resources:
+# 		#		 mem_gb=config["total_mem_gb"]
+# 		input:
+# 			reads=rules.decontam.output.deconGZ,
+# 		threads: threads_per_job
+# 		params:
+# 			confidence=config["taxCONF"],
+# 			classDB=config["TAXdbPATH"],
+# 		output:
+# 			report=READS_TAX + "{sampName}_taxREPORTkr.txt",
+# 			outlog=READS_TAX + "{sampName}_classLOGkr.txt",
+# 		shell:
+# 			"""
+# 			module load kraken
+# 			mkdir -p {READS_TAX}
+# 			kraken2 --use-names --gzip-compressed --threads {threads} --output - \
+# 			--confidence {params.confidence} --db {params.classDB} --memory-mapping \
+# 			{input.reads} --report {output.report} 2>> {output.outlog}
+# 			"""
+	
+
+# 	rule readTAX_run_Braken2:
+# 		   # resources:
+# 		# mem_gb=config["total_mem_gb"]
+# 		input:
+# 			kreport=rules.readTAX_run_Kraken2.output.report,
+# 		threads: threads_per_job
+# 		params:
+# 			confidence=config["taxCONF"],
+# 			classDB=config["TAXdbPATH"],
+# 			readLen=100,
+# 			taxLvl="S", ## def: S, can multiple levels?
+# 		output:
+# 			report=READS_TAX + "{sampName}_taxREPORTbr.txt",
+# 			outlog=READS_TAX + "{sampName}_classLOGbr.txt"
+# 		shell:
+# 			"""
+# 			module load bracken
+# 			bracken -d {params.classDB} -r {params.readLen} -l {params.taxLvl} \
+# 			-t {threads} -o - \
+# 			-i {input.kreport} -w {output.report} 2>> {output.outlog}
+# 			"""
+
+
+# 	rule readTAX_kreport2krona:
+# 		input:
+# 			krfile=rules.readTAX_run_Braken2.output.report
+# 		params:
+# 			kreport2krona_script=config["kreport2krona_script"],
+# 		output:
+# 			binfile=READS_TAX + "{sampName}_4krona.txt",
+# 		shell:
+# 			"""
+# 			python3 {params.kreport2krona_script} --report-file {input.krfile} -o {output.binfile} && sed -i \
+# 			's/\\tUnclassified\\t\\t\\t\\t\\t\\t\\t0/\\tUnclassified\\tUnclassified\\tUnclassified\\tUnclassified\\tUnclassified\\tUnclassified\\tUnclassified\\t0/g' {output.binfile}
+# 			"""
+
+
+# 	rule kronaPlot:
+# 		input:
+# 			expand(rules.readTAX_kreport2krona.output.binfile, sampName=samples)
+# 		output:
+# 			html=READS_TAX + "readsTAX.html"
+# 		shell:
+# 			"module load kronatools && ktImportText {input} -o {output.html}"
+# ###===================== end of readTAX section
+
+
+
+
+
+### =================================================================================================
+### ================================ GENE & PWY section ==============================================
+### =================================================================================================
+if PREDICT_FUNCTION: 
+	
+	rule asmbPWY_featurePrediction:
+		threads: clust_conf["asmbPWY_featurePrediction"]["threads"]
+		envmodules: *clust_conf["asmbPWY_featurePrediction"]["modules"]
+		input:
+			rules.assembly.output.asmbFASTA
+		params:
+			gff2gtf_script=config["gff2gtf_script"],
+			outDIR=FEAT_DIR,
+			doneTAX=expand(rules.asmbTAX_biomTABs.output.biom, sampName=samples), ##workflow order
+		output:
+			gff=feature_prefix + ".gff",
+			faa=feature_prefix + ".faa",
+			fna=feature_prefix + ".fna",
+			gtf=feature_prefix + ".gtf",
+		shell:"""
+			mkdir -p {params.outDIR}
+			prodigal -p meta -i {input} -f gff -o {output.gff} \
+				-a {output.faa} -d {output.fna}  -q
+			
+			{params.gff2gtf_script} {output.gff} > {output.gtf}
+			"""
+
+
+	rule asmbPWY_featureCounts: ## set for long Reads
+		threads: clust_conf["asmbPWY_featureCounts"]["threads"]
+		envmodules: *clust_conf["asmbPWY_featureCounts"]["modules"]
+		input:
+			gtf=rules.asmbPWY_featurePrediction.output.gtf,
+			bam=rules.minimap2bam.output.bamFILE,
+		params:
+			basename=feature_prefix + "_counts",
+		output:
+			geneCounts=temp(feature_prefix + "_counts.txt"), ## temp() clean at end
+			geneStats =feature_prefix + "_stats.txt",
+		shell: """
+			featureCounts -M -T {threads} -L -O -F 'GTF' -t 'CDS'  -g 'gene_id' \
+			  -a {input.gtf} -o {params.basename}  {input.bam}
+
+			grep -v "#" {params.basename} |sed '1 s/Length\\t.*bam$/Length\\tReads/' > {output.geneCounts}
+			mv {params.basename}.summary {output.geneStats} && rm {params.basename}
+			"""
+			## Note: subread::featureCount may present "ERROR: sequence length in the BAM record is out of the expected region" 
+			## error should be ignored, newer versions are not supposed to have it https://support.bioconductor.org/p/9151058/
+
+
+	rule asmbPWY_featureTPM:
+		input:
+			geneCounts=rules.asmbPWY_featureCounts.output.geneCounts,
+		params:
+			awk_TPM='BEGIN{FS=OFS="\t"} NR==1 {print $0, "Coverage", "TPM"; next} \
+					{ if ($6 == 0 || $7 == 0){coverage = 0; tpm=0 } \
+					  else {coverage = $7 / $6; sum += $7; tpm = ($7 / $6) * 1e6 / sum } \
+					print $0, coverage, tpm }'
+		output:
+			geneTPM = feature_prefix + "_counts_wTPM.txt",
+		shell:"""
+			awk '{params.awk_TPM}' {input.geneCounts} > {output.geneTPM} 
+			"""
+		   
+
+	rule asmbPWY_featureAnnotation:
+		threads: clust_conf["asmbPWY_featureAnnotation"]["threads"]
+		envmodules: *clust_conf["asmbPWY_featureAnnotation"]["modules"]
+		input:
+			rules.asmbPWY_featurePrediction.output.faa
+		params:
+			#eggnog_db="/usr/local/apps/eggnog-mapper/2.1.6/data/", ## default on biowulf
+			out_dir=ANNOT_DIR,
+			tmp_dir=TMP_DIR,
+			blockSize = 16, 				## def 2: bigger  will use more memory but increase speed
+			idxChunks = 1, 					## def 4: ?smaller will use more memory but increase speed
+		output:
+			hits= ANNOT_DIR + "annots.emapper.hits",
+			logs= ANNOT_DIR + "annots.emapper.seed_orthologs",
+			anot= ANNOT_DIR + "annots.emapper.annotations",
+		shell:	"""
+						
+			emapper.py -i {input} -o annots --output_dir {params.out_dir} --cpu {threads} --dbmem \
+			--itype proteins --block_size {params.blockSize} --index_chunks {params.idxChunks} \
+			--override --temp_dir {params.tmp_dir} --scratch_dir {params.tmp_dir}
+			"""
+		  	## --data_dir {params.eggnog_db} 
+		  	## data is in /usr/local/apps/eggnog-mapper/2.1.6/data/ : default on biowulf
+
+	rule asmbPWY_geneSUMMARY:
+			input: 
+				anot=rules.asmbPWY_featureAnnotation.output.anot,
+				abun=rules.asmbPWY_featureTPM.output.geneTPM,
+			params:
+				awk_match='BEGIN{FS=OFS="\t"} NR==FNR {map[$1] = $0; next} FNR>1 {print map[$1], $0}' ,
+				awk_rearrange ='BEGIN{FS=OFS="\t"} {print $1, $7, $8, $6, $2, $3,$4}' ,
+			output:	
+				tmp=temp(PWYS_DIR + "tmp.txt"),			
+				annotsFILE = ANNOT_DIR + "annotations.txt",
+				geneSUMRY  = PWYS_DIR  + "genesSUMMARY.txt"
+			shell:	"""
+				cat {input.anot} | grep "query\\|contig_" | cut -f1,3,4,8,10-13 | \
+					awk '{params.awk_rearrange}' > {output.annotsFILE}
+				
+				# merging the counts & annotations file (only annotated)
+				## printing the header on the output
+				paste -d $'\\t' <(head -n1 {input.abun}) <(head -n1 {output.annotsFILE}) > {output.tmp}
+				
+				## pasting annotattions and counts
+				awk '{params.awk_match}' {input.abun} {output.annotsFILE} >> {output.tmp}
+				cut -f 1-9,11-16 {output.tmp} | sed 's/ko://g' >> {output.geneSUMRY}
+				"""
+
+
+	rule asmbPWY_geneSEQextractHDRS:
+		input:
+			rules.asmbPWY_geneSUMMARY.output.annotsFILE,
+		output:
+			hdrs_ec=temp(ANNOT_DIR + "headersEC.txt"),
+			hdrs_ko=temp(ANNOT_DIR + "headersKO.txt"),
+			hdrs_gg=temp(ANNOT_DIR + "headersGG.txt") ## GG = KEGGmap 
+		shell:	"""
+			grep "ko:" {input} |cut -f1 |sort -u -V > {output.hdrs_ko}
+			grep "map" {input} |cut -f1 |sort -u -V > {output.hdrs_gg}
+			cut -f1,4 {input} |grep -v "-" |cut -f1 |sort -u -V > {output.hdrs_ec}
+			"""
+	 
+
+	rule asmbPWY_geneSEQextract:
+		envmodules: *clust_conf["asmbPWY_geneSEQextract"]["modules"]
+		input: 
+			faa=rules.asmbPWY_featurePrediction.output.faa,
+			fna=rules.asmbPWY_featurePrediction.output.fna,
+			kos=rules.asmbPWY_geneSEQextractHDRS.output.hdrs_ko,
+			ecs=rules.asmbPWY_geneSEQextractHDRS.output.hdrs_ec,
+		output:
+			kofaa=PWYS_DIR + "genesKO.faa",
+			kofna=PWYS_DIR + "genesKO.fna",
+			ecfaa=PWYS_DIR + "genesEC.faa",
+			ecfna=PWYS_DIR + "genesEC.fna",
+		shell:	"""
+			seqtk subseq {input.faa} {input.kos} > {output.kofaa}
+			seqtk subseq {input.fna} {input.kos} > {output.kofna}
+			seqtk subseq {input.faa} {input.ecs} > {output.ecfaa}
+			seqtk subseq {input.fna} {input.ecs} > {output.ecfna}
+			"""
+	
+
+	rule asmbPWY_aveGEN:
+		input:
+			geneSMRY = rules.asmbPWY_geneSUMMARY.output.geneSUMRY,
+		params:
+			doneSEQext= rules.asmbPWY_geneSEQextract.output.kofna, ## workflow organization
+			KOdescrib = config["KO_descriptions"],
+			ECdescrib = config["EC_descriptions"],
+			awk_split = 'BEGIN{FS=OFS="\t"} {n=split($3,s,",");for (i=1;i<=n;i++) {$3=s[i];print} }' , ##splits annotColm (3), by comma, per line
+			awk_aveGEN= 'BEGIN{FS=OFS="\t"} NR>1 {sum[$3]+=$2; count[$3]++} END {for (key in sum) print key, sum[key]/count[key]}' ,## takes average TPM for each annotation
+			awk_match = 'BEGIN{FS=OFS="\t"} FNR==NR {map[$1] = $2; next} FNR==1 {print $1, $2 , "Description"; next} FNR>1 {print $1, $2 , map[$1]}' , ## matches descriptions to KO
+		output:
+			tmpAko=temp(PWYS_DIR + "tmpAko.txt"), ## temp() ## used in MinPath rule
+			tmpAec=temp(PWYS_DIR + "tmpAec.txt"), ## temp() ## used in MinPath rule
+			tmpBko=temp(PWYS_DIR + "tmpBko.txt"), ## temp()
+			tmpBec=temp(PWYS_DIR + "tmpBec.txt"), ## temp()
+			aveKO= PWYS_DIR + "{sampName}_aveGEN.ko.txt",
+			aveEC= PWYS_DIR + "{sampName}_aveGEN.ec.txt",
+		shell:	"""
+			### for KOs
+			##greps contig (1), KO annotations (10) & TPM (9), splits annotations-at-comma, per line
+			cat {input.geneSMRY} |cut -f1,9,10 |grep -v '-' |awk '{params.awk_split}'  > {output.tmpAko} 	 #
+			
+			## takes average of TPM per annotation & adds header
+			echo $'KO\taveTPM' > {output.tmpBko} && awk '{params.awk_aveGEN}' {output.tmpAko} | sort -k2 -nr >> {output.tmpBko}
+			
+			## greps KO annots & their descriptions
+			awk '{params.awk_match}' {params.KOdescrib}  {output.tmpBko} >  {output.aveKO}
+
+			### for ECs
+			##greps contig (1), EC annotations (12) & TPM (9), splits annotations-at-comma, per line
+			cat {input.geneSMRY} |cut -f1,9,12 |grep -v "-" |awk '{params.awk_split}' > {output.tmpAec} 	
+			
+			## takes average of TPM per annotation & adds header
+			echo $'EC\taveTPM' > {output.tmpBec} && awk '{params.awk_aveGEN}' {output.tmpAec} | sort -k2 -nr >> {output.tmpBec}
+			
+			## greps KO annots & their descriptions
+			awk '{params.awk_match}' {params.ECdescrib}  {output.tmpBec} >  {output.aveEC}
+			""" 
+
+
+	rule asmbPWY_merge_aveGEN_files:
+		input:
+			inKO=expand(rules.asmbPWY_aveGEN.output.aveKO, sampName=samples),
+			inEC=expand(rules.asmbPWY_aveGEN.output.aveEC, sampName=samples),
+		params:
+			geneBINko=PWYprof_DIR + "geneBINko/",
+			geneBINec=PWYprof_DIR + "geneBINec/",
+			awk_aveGEN_mTAB=config["aveGEN_merge"], 
+		output:
+			mTABko=PWYprof_DIR + "merged_aveGEN.ko_table.txt",
+			mTABec=PWYprof_DIR + "merged_aveGEN.ec_table.txt",
+		shell: """
+			#merge gene::aveGEN.ko.txt tables
+					## copy aveGEN files in 1 dir (easier)
+			mkdir -p {params.geneBINko} && cp {input.inKO} {params.geneBINko}/
+			awk -f '{params.awk_aveGEN_mTAB}' {params.geneBINko}/*.txt | \
+					sed "1s|{params.geneBINko}/||g" > {output.mTABko}  ## rm -rf {params.geneBINko}
+			
+			#merge gene::aveGEN.ec.txt tables
+					## copy aveGEN files in 1 dir (easier)
+			mkdir -p {params.geneBINec} && cp {input.inEC} {params.geneBINec}/
+			awk -f '{params.awk_aveGEN_mTAB}' {params.geneBINec}/*.txt | \
+					sed "1s|{params.geneBINec}/||g" > {output.mTABec} ## rm -rf {params.geneBINec}
+			"""
+
+### ========================= minPATH stuff ================================
+	rule asmbPWY_prep_minPATH_DIR:
+		input:
+			geneSMRY=rules.asmbPWY_geneSUMMARY.output.geneSUMRY,
+			tmpAko=rules.asmbPWY_aveGEN.output.tmpAko,
+			tmpAec=rules.asmbPWY_aveGEN.output.tmpAec,
+		params:
+			anno_map = annoMAP_file ,
+			hrr_file = hrrFILE ,
+			mpDIR    = minPATH_DIR,
+		output:
+			annoMAP=temp(minPATH_DIR + "annoMAPfile.txt"),
+			hrrFILE=temp(minPATH_DIR + "hrryMAPfile.txt"),
+		shell:"""
+			if [[ ! -d {params.mpDIR} ]] ; then mkdir -p {params.mpDIR} ; fi
+				cp {params.anno_map} {output.annoMAP} && \
+				cp {params.hrr_file} {output.hrrFILE}
+			"""
+
+
+	rule asmbPWY_prep_minPATH_files:
+		input:
+			tmpAko=rules.asmbPWY_aveGEN.output.tmpAko,
+			tmpAec=rules.asmbPWY_aveGEN.output.tmpAec,
+		params:
+			mpDIR=rules.asmbPWY_prep_minPATH_DIR.params.mpDIR,
+		output: 
+			anno=temp(minPATH_DIR + "any_annots.txt"),
+			gtmp=temp(minPATH_DIR + "any_anTPMs.txt")
+		run:
+			if config["annots_type"] == "KO": ## another way to skin a cow
+				shell("cut -f1,3 {input.tmpAko} |grep -v 'Geneid' > {output.anno} && cut -f1,2 {input.tmpAko} |grep -v 'Geneid' > {output.gtmp}")
+			else:
+				shell("cut -f1,3 {input.tmpAec} |grep -v 'Geneid' > {output.anno} && cut -f1,2 {input.tmpAec} |grep -v 'Geneid' > {output.gtmp}")
+
+
+
+	rule asmbPWY_run_minPath: ##change it to this minpath: https://gitlab.com/pooranis/minpath for temp-DIR setting
+		input:
+			annoIN=rules.asmbPWY_prep_minPATH_files.output.anno,
+			anoMAP=rules.asmbPWY_prep_minPATH_DIR.output.annoMAP,
+		params:
+			minpath=config["minpath_script"],
+			mpMASTER=config["mpMASTER_DIR"],
+			inDIR=rules.asmbPWY_prep_minPATH_DIR.params.mpDIR, #cannot be in input
+		log:
+			mpLOG  = minPATH_DIR + "minPATH.log.txt",
+		output:
+			report=  minPATH_DIR + "minPATH.report.txt",
+			details= minPATH_DIR + "minPATH.details.txt",
+		shell:"""
+			python3 {params.minpath}  -any {input.annoIN} -map {input.anoMAP} \
+						-report {output.report} -mps {params.inDIR}/test.mps \
+						-details {output.details} >> {log.mpLOG} || \
+			echo "-----> No pathways were found"  >> {log.mpLOG}
+			touch {output.report} {output.details} {log.mpLOG}
+			"""
+			# if [ -s {input.annoIN} ]; then
+			# 	### cd {params.inDIR}
+			# 	python3 {params.minpath} \
+			# 			-any {input.annoIN} -map {input.anoMAP} \
+			# 			-report {output.report} -mps {params.inDIR}/test.mps \
+			# 			-details {output.details} >> {params.mpLOG} && sleep 2s
+			# else
+			# 	echo "The annotations file {input.annoIN} is empty, so there is no pathways to infer."
+			# 	touch {output.report} {output.details} {params.mpLOG}
+			# fi
+		
+
+	rule asmbPWY_extract_minPATH_pathways:
+		input:
+			rules.asmbPWY_run_minPath.output.report
+		params: 
+			expand(rules.asmbPWY_run_minPath.output.report, sampName=samples),
+		output:
+			minPATH_DIR + "complete_pathways.txt"
+		shell:	"""
+			if [ -s {input} ]; then
+				grep 'minpath\ 1' {input} > {output}
+			else
+				echo "----> No complete pathways detected" > {output}
+			fi
+			"""
+
+
+	rule asmbPWY_run_genes2krona:
+		input:
+			anyANOTs=rules.asmbPWY_prep_minPATH_files.output.anno,
+			geneTPM =rules.asmbPWY_prep_minPATH_files.output.gtmp,
+			report  =rules.asmbPWY_extract_minPATH_pathways.output,
+			anoMAP  =rules.asmbPWY_prep_minPATH_DIR.output.annoMAP,
+			hrrFILE =rules.asmbPWY_prep_minPATH_DIR.output.hrrFILE,
+		params:
+			g2k_script=config["genes2krona_script"],
+			# annotations_map=config["annotations_map"],
+			# annotations_hrr=config["annotations_hrr"],
+			# pwyBIN=PWYprof_BIN,
+		output:
+			tmp_4kr=temp(minPATH_DIR + "tmp_4kr.txt"),
+			krona_out=minPATH_DIR + "{sampName}_4krona.txt",
+			# copy_out =PWYprof_BIN + "{sampName}.txt",
+		shell:	"""
+			if [ -s {input.anyANOTs} -a -s {input.geneTPM} -a -s {input.report} ]; then
+				python3 {params.g2k_script} -i {input.anyANOTs} -m {input.anoMAP} \
+				-H {input.hrrFILE} -n {wildcards.sampName} -c {input.geneTPM}\
+				-l {input.report} -o {output.tmp_4kr} && \
+				sed '1s/^/#/' {output.tmp_4kr} > {output.krona_out} 
+			else
+				echo "No complete pathways to be plotted."
+				touch {output.tmp_4kr} {output.krona_out} 
+			fi
+			"""
+
+
+	rule asmbPWY_kronaText:
+		input:
+			rules.asmbPWY_run_genes2krona.output.krona_out,
+		params:
+			pwyBIN=PWYprof_BIN,
+		output:
+			copy_out = PWYprof_BIN + "{sampName}.txt",
+		shell:"""
+			if [[ ! -d {params.pwyBIN} ]] ; then mkdir -p {params.pwyBIN} ; fi
+			sed 's/; /\\t/g' {input} > {output.copy_out}
+			### cp {input} {output.copy_out}
+			"""
+
+
+	rule asmbPWY_kronaPlot:
+		envmodules: *clust_conf["asmbPWY_kronaPlot"]["modules"]
+		input:
+			expand(rules.asmbPWY_kronaText.output.copy_out, sampName=samples),
+		params:
+			pwyBIN=PWYprof_BIN,
+		output:
+			pwyPLOT=PWYprof_DIR + "asmbPWYs_"+ pwyDB + "_plot.html",
+		shell:"""
+			ktImportText {input} -o {output.pwyPLOT}
+			""" 
+
+
+	rule asmbPWY_merge_PWYtables:
+		envmodules: *clust_conf["asmbPWY_merge_PWYtables"]["modules"]
+		input:
+			pwyFILES = expand(rules.asmbPWY_kronaText.output.copy_out, sampName=samples),
+		params: 
+			pwyBIN=PWYprof_BIN,
+			pwyMRGR_script=config["PWY_mergeR_script"],
+			suffix = ".txt",
+			out_dir=PWYprof_DIR,
+		output:
+			out2= PWYprof_DIR + "merged_avePWY." + pwyDB + "_table.txt",
+			out4=temp(PWYprof_DIR + "merged_avePWY." + pwyDB + "_4biom.txt"), ##temp()
+		shell:"""
+			Rscript {params.pwyMRGR_script} --binDIR {params.pwyBIN} \
+			--suffix {params.suffix} --outDIR {params.out_dir}
+			"""
+
+
+	rule asmbPWY_PWYbioms:
+		envmodules: *clust_conf["asmbPWY_PWYbioms"]["modules"]
+		input:
+			mergtab_pwy=rules.asmbPWY_merge_PWYtables.output.out4,
+			mapping_file=config["map_file"]
+		params:
+			tabtype="Pathway table"
+		output:
+			biom=PWYprof_DIR + "merged_avePWY." + pwyDB + "_json.biom",
+			# tmp=temp(PWYprof_DIR + "tmp_.txt")
+		shell:	"""
+			biom convert -i {input.mergtab_pwy} -m <(sed '1s/^/#/' {input.mapping_file}) \
+				-o {output.biom} --to-json --table-type='{params.tabtype}' \
+				--process-obs-metadata taxonomy
+			"""	
+
+
+	if len(samples) > 1:
+		rule asmbPWY_divPLOTs:
+			envmodules: *clust_conf["asmbPWY_divPLOTs"]["modules"]
+			input:
+				in2=rules.asmbPWY_merge_PWYtables.output.out2,
+				mapping_file=config["map_file"], #importing w/o header=> # ok
+			params:
+				PWY_divR_script=config["PWY_divR_script"],
+				tmp_dir= "./" , #config["tmp_dir"],
+				out_dir=PWYprof_PLOTS
+			output:
+				done=PWYprof_PLOTS + "PWY_divPLOTS.done",
+				pdf= PWYprof_PLOTS + "PWY_BetaDiv_PCoA.pdf"
+			shell:"""
+				echo '\n ---> divPlots for asmbPWY in datasets with 2+ samples \n'
+				Rscript {params.PWY_divR_script} --mTABfile {input.in2} \
+				--mfile {input.mapping_file} --outdir {params.out_dir} || \
+					echo 'ERROR: Failed to generate PWY_divPLOTs'
+				touch {output.done}
+				"""
+				# sed '1s/#//' {input.mapping_file} > {output.tmp_map}
+
+
+	if runRGI:
+		rule run_RGI: ## this could be made to somehow use tmp_dir, but pain
+			threads: clust_conf["run_RGI"]["threads"]
+			envmodules: *clust_conf["run_RGI"]["modules"]
+			conda: *clust_conf["run_RGI"]["conda"]
+			input:
+				fna=rules.asmbPWY_featurePrediction.output.fna,
+			params:
+				ftype='contig', # protien
+				tmp_dir=TMP_DIR,
+				infile="feature.fna",
+				prefix="rgiFNA_raw",
+				carddb_json=config["CARD_DB_JSON"],
+				out_DIR = wDIR + "/" + RGI_DIR,
+				rawout ="rgiFNA_raw.txt",
+				jsonout="rgiFNA_raw.json",
+				mainout="rgiFNA_main.txt",
+			output:
+				rgi_raw =RGI_DIR + "rgiFNA_raw.txt",
+				rgi_main=RGI_DIR + "rgiFNA_main.txt",
+			shell:	"""
+				
+				cp {input.fna} {params.carddb_json} {params.tmp_dir}/
+
+				cd {params.tmp_dir} 
+
+				rgi load --local -i {params.tmp_dir}/card.json
+				rgi main -i {params.tmp_dir}/{params.infile} -o {params.prefix} \
+					--clean --split_prodigal_jobs  --local  \
+					--input_type {params.ftype} --num_threads {threads}
+				
+
+				cut -f2,5,8,9,10,15,16,17,21 {params.rawout} > {params.mainout}
+
+				mkdir -p {params.out_DIR}	
+				cp {params.rawout} {params.jsonout} {params.mainout} {params.out_DIR}/
+				
+				"""
+
+
+
+
+# # ###cleanup rule
+# # rule clean_up:
+# # 	shell:
+# # 		"""
+# # 		echo '--- cleaning output....'
+# # 		rm profilesTAX/kr2_logs/*bigLOG.txt TEDreads/kr2_logs/*bigLOG.txt
+# # 		rm TEDreads/*te.fastq.gz
+# # 		"""
+
